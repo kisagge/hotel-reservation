@@ -13,7 +13,7 @@ import { formatDateKo, formatShortDate, formatTime, formatWon } from "@/lib/form
 import { durationKo, hh } from "@/lib/rulesCopy";
 import { addDays, diffDays, todayKst, type YMD } from "@/lib/time";
 import { BookingSummary } from "./BookingSummary";
-import { EMPTY_RANGE, nightsOf, stayRangeReducer, type StayRange } from "./stayRange";
+import { nightsOf, stayRangeReducer, type StayRange } from "./stayRange";
 import { checkoutHref, useDayuseSlots, useQuote, useStayDays, type QuoteIn } from "./useAvailability";
 
 type Tab = "dayuse" | "stay";
@@ -43,7 +43,10 @@ function Booking({ rules }: { rules: Rules }) {
   const maxMonth = shiftMonth(minMonth, MONTHS_AHEAD);
   const set = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(sp);
-    for (const [k, v] of Object.entries(patch)) (v === null ? next.delete(k) : next.set(k, v));
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === null) next.delete(k);
+      else next.set(k, v);
+    }
     router.replace(`${pathname}?${next}`, { scroll: false });
   };
 
