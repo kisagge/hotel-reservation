@@ -37,12 +37,12 @@ export function formatRange(startIso: string, endIso: string): string {
   return `${formatDateKo(s.ymd)} → ${formatDateKo(e.ymd)}`;
 }
 
-/** Compact admin table form: "10/19 (월) 12:00 – 16:00" or "10/20 (화) 15:00 → 10/21 11:00". */
+/** Compact admin table form: "10/19 (월) 12:00 – 16:00" or, across days, "10/20 (화) → 10/21 (수)". */
 export function formatAdminRange(startIso: string, endIso: string): string {
   const s = kstParts(startIso);
   const e = kstParts(endIso);
   const md = (d: YMD) => `${Number(d.slice(5, 7))}/${d.slice(8)}`;
   const sameDay = e.ymd === s.ymd || (e.ymd === addDays(s.ymd, 1) && e.hour === 0 && e.minute === 0);
   if (sameDay) return `${md(s.ymd)} (${weekdayKo(s.ymd)}) ${hm(s.hour, s.minute)} – ${e.ymd === s.ymd ? hm(e.hour, e.minute) : "24:00"}`;
-  return `${md(s.ymd)} (${weekdayKo(s.ymd)}) ${hm(s.hour, s.minute)} → ${md(e.ymd)} ${hm(e.hour, e.minute)}`;
+  return `${md(s.ymd)} (${weekdayKo(s.ymd)}) → ${md(e.ymd)} (${weekdayKo(e.ymd)})`;
 }
