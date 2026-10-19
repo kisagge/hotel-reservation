@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import DB, CurrentUser
+from app.api.deps import DB, CurrentUser, DbId
 from app.core.clock import get_now
 from app.domain.rules import RuleViolation
 from app.models import Reservation
@@ -51,8 +51,8 @@ def mine(user: CurrentUser, db: DB, now: Now) -> list[ReservationOut]:
 
 
 @router.post("/{reservation_id}/cancel", response_model=ReservationOut)
-def cancel(reservation_id: int, user: CurrentUser, db: DB, now: Now, payments: Payments) -> ReservationOut:
-    r = db.get(Reservation, reservation_id)
+def cancel(reservation_id: DbId, user: CurrentUser, db: DB, now: Now, payments: Payments) -> ReservationOut:
+    r = svc.get_for_update(db, reservation_id)
     if r is None or r.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "NOT_FOUND")
     cancel_or_409(db, r, "GUEST", now, payments)

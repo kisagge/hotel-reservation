@@ -137,3 +137,24 @@ def test_many_concurrent_creates_never_500(user_client, make_client):
         with ThreadPoolExecutor(len(clients)) as pool:
             codes = sorted(pool.map(lambda c: c.post("/api/reservations", json=body).status_code, clients))
         assert codes == [201, 409, 409, 409, 409], f"day {day}: {codes}"
+
+
+def test_concurrent_cancels_refund_once(user_client, make_client, db):
+    """Review minor: cancels must lock the row so a reservation is refunded exactly once."""
+    rid = user_client.post("/api/reservations", json=DAYUSE_23_15).json()["id"]
+    clients = [user_client] + [make_client() for _ in range(4)]
+    for c in clients[1:]:
+        c.cookies.update(user_client.cookies)
+    with ThreadPoolExecutor(len(clients)) as pool:
+        codes = sorted(pool.map(lambda c: c.post(f"/api/reservations/{rid}/cancel").status_code, clients))
+    assert codes == [200, 409, 409, 409, 409]
+
+
+def test_huge_ids_are_404_not_500(user_client):
+    assert user_client.post("/api/reservations/1099511627776/cancel").status_code in (404, 422)
+
+
+def test_far_future_dates_are_422_not_500(client):
+    res = client.post("/api/quotes", json={"type": "STAY", "check_in": "9999-12-30", "nights": 2})
+    assert res.status_code == 422
+    assert client.get("/api/availability/dayuse", params={"date": "9999-12-31"}).status_code == 422

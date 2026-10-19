@@ -18,6 +18,8 @@ export function validateSettings(v: Rules): Errors {
   for (const k of PRICE_KEYS) if (!(v[k] > 0)) e[k] = "0원보다 커야 해요";
   if (v.dayuse_first_start_hour > v.dayuse_last_start_hour) e.dayuse_first_start_hour = "첫 입실은 마지막 입실보다 늦을 수 없어요";
   if (v.stay_check_out_hour >= v.stay_check_in_hour) e.stay_check_out_hour = "체크아웃은 체크인보다 빨라야 해요";
+  else if (v.stay_check_out_hour * 60 + v.cleaning_buffer_minutes > v.stay_check_in_hour * 60)
+    e.cleaning_buffer_minutes = "체크아웃 후 청소가 다음 체크인 전에 끝나야 해요";
   return e;
 }
 
@@ -120,7 +122,7 @@ export function SettingsForm({ initial, onSave, saving, aside }: {
 
           <section className="flex flex-col gap-3.5 rounded-lg border border-line bg-surface p-6">
             <h2 className="text-heading-m font-bold">공통 정책</h2>
-            <SettingRow title="청소 시간" desc="퇴실 후 다음 입실까지 비워두는 시간. 모든 예약 뒤에 자동으로 붙어요">
+            <SettingRow title="청소 시간" desc="퇴실 후 다음 입실까지 비워두는 시간. 모든 예약 뒤에 자동으로 붙어요" error={errors.cleaning_buffer_minutes}>
               <Stepper label="청소 시간" value={v.cleaning_buffer_minutes} display={v.cleaning_buffer_minutes ? durationKo(v.cleaning_buffer_minutes) : "없음"}
                 step={30} min={0} max={240} onChange={(n) => set("cleaning_buffer_minutes", n)} />
             </SettingRow>

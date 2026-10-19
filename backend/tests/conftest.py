@@ -116,9 +116,16 @@ from app.models import Reservation
 
 def book(db, start, end, blocked, *, type="DAYUSE", status="CONFIRMED", user_id=None, price=35000,
          guest_name="테스트", nights=None, block_reason=None) -> Reservation:
+    """Insert a row that satisfies the reservation shape constraints (see migration 0003)."""
+    from datetime import timedelta
+    if type == "STAY" and nights is None:
+        nights = max(1, round((end - start).total_seconds() / 86400))
     r = Reservation(room_id=1, type=type, status=status, start_at=start, end_at=end, blocked_until=blocked,
                     user_id=user_id, total_price=price, guest_name=guest_name, nights=nights,
-                    block_reason=block_reason)
+                    block_reason=block_reason,
+                    cancel_deadline_at=None if type == "BLOCK" else start - timedelta(hours=24),
+                    cancelled_at=start - timedelta(days=2) if status == "CANCELLED" else None,
+                    cancelled_by="GUEST" if status == "CANCELLED" else None)
     db.add(r)
     db.commit()
     return r

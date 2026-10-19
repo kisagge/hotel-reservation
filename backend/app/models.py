@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -19,7 +19,10 @@ def _ts(**kw) -> Mapped[datetime]:
 
 class User(Base):
     __tablename__ = "users"
-    __table_args__ = (CheckConstraint("role IN ('USER','ADMIN')", name="users_role"),)
+    __table_args__ = (
+        CheckConstraint("role IN ('USER','ADMIN')", name="users_role"),
+        CheckConstraint("email = lower(email)", name="users_email_lower"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True)
@@ -32,6 +35,7 @@ class User(Base):
 
 class Room(Base):
     __tablename__ = "rooms"
+    __table_args__ = (CheckConstraint("capacity >= 1 AND size_m2 >= 1", name="rooms_sizes"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
@@ -46,6 +50,7 @@ class Room(Base):
 
 class RoomPhoto(Base):
     __tablename__ = "room_photos"
+    __table_args__ = (Index("ix_room_photos_room_sort", "room_id", "sort_order"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"))
@@ -55,6 +60,15 @@ class RoomPhoto(Base):
 
 class RoomSettings(Base):
     __tablename__ = "room_settings"
+    __table_args__ = tuple(CheckConstraint(expr, name=name) for name, expr in {
+        "room_settings_prices": "dayuse_weekday_price > 0 AND dayuse_weekend_price > 0 AND stay_weekday_price > 0 AND stay_weekend_price > 0",
+        "room_settings_dayuse": "dayuse_first_start_hour BETWEEN 0 AND 23 AND dayuse_last_start_hour BETWEEN dayuse_first_start_hour AND 23"
+                                " AND dayuse_hours BETWEEN 1 AND 12",
+        "room_settings_stay": "stay_check_out_hour BETWEEN 0 AND 23 AND stay_check_in_hour BETWEEN 0 AND 23 AND stay_max_nights BETWEEN 1 AND 30",
+        "room_settings_policy": "cleaning_buffer_minutes BETWEEN 0 AND 240 AND guest_cancel_deadline_hours BETWEEN 0 AND 168",
+        # A guest checking out at 11:00 plus cleaning must be done before the next 15:00 check-in.
+        "room_settings_turnover": "stay_check_out_hour * 60 + cleaning_buffer_minutes <= stay_check_in_hour * 60",
+    }.items())
 
     id: Mapped[int] = mapped_column(primary_key=True)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), unique=True)
@@ -87,6 +101,22 @@ class Reservation(Base):
         CheckConstraint("status IN ('CONFIRMED','CANCELLED')", name="reservations_status"),
         CheckConstraint("cancelled_by IS NULL OR cancelled_by IN ('GUEST','ADMIN')", name="reservations_cancelled_by"),
         CheckConstraint("start_at < end_at AND end_at <= blocked_until", name="reservations_window"),
+        # Every row is exactly one valid kind: a BLOCK (no guest, no price, no buffer) or a booking with its policy snapshot.
+        CheckConstraint(
+            "(type = 'BLOCK' AND user_id IS NULL AND total_price = 0 AND nights IS NULL AND block_reason IS NOT NULL"
+            " AND cancel_deadline_at IS NULL AND end_at = blocked_until)"
+            " OR (type = 'DAYUSE' AND nights IS NULL AND block_reason IS NULL AND cancel_deadline_at IS NOT NULL AND guest_name <> '')"
+            " OR (type = 'STAY' AND nights IS NOT NULL AND nights >= 1 AND block_reason IS NULL AND cancel_deadline_at IS NOT NULL AND guest_name <> '')",
+            name="reservations_kind_shape",
+        ),
+        CheckConstraint("(status = 'CANCELLED') = (cancelled_at IS NOT NULL AND cancelled_by IS NOT NULL)", name="reservations_cancel_state"),
+        CheckConstraint("total_price >= 0", name="reservations_price_nonneg"),
+        Index("ix_reservations_user_start", "user_id", "start_at"),
+        Index("ix_reservations_start_at", "start_at"),
+        Index("ix_reservations_blocks_upcoming", "start_at", postgresql_where=text("type = 'BLOCK' AND status = 'CONFIRMED'")),
+        *(Index(f"ix_reservations_{c}_trgm", c, postgresql_using="gin", postgresql_ops={c: "gin_trgm_ops"})
+          for c in ("code", "guest_name", "guest_phone")),
+        # reservations_no_overlap (EXCLUDE USING gist) lives in migration 0001; Alembic cannot reflect exclusion constraints.
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -114,7 +144,11 @@ class Reservation(Base):
 
 class Payment(Base):
     __tablename__ = "payments"
-    __table_args__ = (CheckConstraint("status IN ('PAID','REFUNDED')", name="payments_status"),)
+    __table_args__ = (
+        CheckConstraint("status IN ('PAID','REFUNDED')", name="payments_status"),
+        CheckConstraint("amount >= 0", name="payments_amount_nonneg"),
+        CheckConstraint("(status = 'REFUNDED') = (refunded_at IS NOT NULL)", name="payments_refund_state"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     reservation_id: Mapped[int] = mapped_column(ForeignKey("reservations.id"), unique=True)

@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import DB, require_admin
+from app.api.deps import DB, DbId, require_admin
 from app.api.reservations import Now, Payments, cancel_or_409, to_out
 from app.core.config import get_settings
 from app.models import Reservation, Room, RoomPhoto
@@ -26,8 +27,8 @@ from app.services import reservations as svc
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 
-def get_booking(db, reservation_id: int) -> Reservation:
-    r = db.get(Reservation, reservation_id)
+def get_booking(db, reservation_id: int, lock: bool = False) -> Reservation:
+    r = svc.get_for_update(db, reservation_id) if lock else db.get(Reservation, reservation_id)
     if r is None or r.type == "BLOCK":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "NOT_FOUND")
     return r
@@ -54,13 +55,13 @@ def list_reservations(
 
 
 @router.get("/reservations/{reservation_id}", response_model=AdminReservationOut)
-def reservation_detail(reservation_id: int, db: DB, now: Now) -> AdminReservationOut:
+def reservation_detail(reservation_id: DbId, db: DB, now: Now) -> AdminReservationOut:
     return to_admin_out(get_booking(db, reservation_id), now, db)
 
 
 @router.post("/reservations/{reservation_id}/cancel", response_model=AdminReservationOut)
-def admin_cancel(reservation_id: int, db: DB, now: Now, payments: Payments) -> AdminReservationOut:
-    r = get_booking(db, reservation_id)
+def admin_cancel(reservation_id: DbId, db: DB, now: Now, payments: Payments) -> AdminReservationOut:
+    r = get_booking(db, reservation_id, lock=True)
     cancel_or_409(db, r, "ADMIN", now, payments)
     return to_admin_out(r, now, db)
 
@@ -86,7 +87,11 @@ def update_room_settings(body: SettingsIn, db: DB) -> SettingsIn:
     settings = svc.load_settings(db)
     for field, value in body.model_dump().items():
         setattr(settings, field, value)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:  # DB CHECKs are the backstop for SettingsIn
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "INVALID_SETTINGS")
     return SettingsIn.model_validate(settings)
 
 
@@ -109,8 +114,8 @@ def create_block(body: BlockIn, db: DB) -> BlockOut:
 
 
 @router.delete("/blocks/{block_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_block(block_id: int, db: DB, now: Now) -> None:
-    r = db.get(Reservation, block_id)
+def delete_block(block_id: DbId, db: DB, now: Now) -> None:
+    r = svc.get_for_update(db, block_id)
     if r is None or r.type != "BLOCK" or r.status != "CONFIRMED":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "NOT_FOUND")
     svc.delete_block(db, r, now)
@@ -150,7 +155,7 @@ def upload_photo(file: UploadFile, db: DB) -> RoomPhoto:
 
 
 @router.delete("/room/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_photo(photo_id: int, db: DB) -> None:
+def delete_photo(photo_id: DbId, db: DB) -> None:
     photo = db.get(RoomPhoto, photo_id)
     if photo is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "NOT_FOUND")

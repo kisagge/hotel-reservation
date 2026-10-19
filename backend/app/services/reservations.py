@@ -1,18 +1,43 @@
 """Reservation persistence and queries. Business rules live in app.domain."""
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
+from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import Select, func, literal, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.clock import KST, kst, today_kst
 from app.domain.availability import Busy, overlaps
 from app.domain.rules import Quote, RuleSettings, quote_dayuse, quote_stay
-from app.models import Reservation, Room, RoomSettings
+from app.models import Payment, Reservation, Room, RoomSettings, User
 from app.schemas import QuoteIn
+from app.services.payments import PaymentProvider
 
 ROOM_ID = 1
+BOOKING_TYPES = ("DAYUSE", "STAY")
+OVERLAP_SQLSTATE = "23P01"
 
 
+class SlotUnavailable(Exception):
+    def __init__(self, reason: str = "SLOT_UNAVAILABLE"):
+        super().__init__(reason)
+        self.reason = reason
+
+
+class CancelDeadlinePassed(Exception):
+    pass
+
+
+class AlreadyCancelled(Exception):
+    pass
+
+
+class BlockOverlaps(Exception):
+    pass
+
+
+# ---- reads ---------------------------------------------------------------------------------------------------
 def load_settings(db: Session) -> RoomSettings:
     return db.scalars(select(RoomSettings).where(RoomSettings.room_id == ROOM_ID)).one()
 
@@ -21,16 +46,20 @@ def load_rules(db: Session) -> RuleSettings:
     return load_settings(db).to_rules()
 
 
+def occupying(start: datetime, end: datetime) -> tuple:
+    """CONFIRMED rows whose [start_at, blocked_until) meets [start, end). Same tstzrange && expression and partial
+    predicate as the reservations_no_overlap exclusion constraint, so its GiST index serves the lookup."""
+    occupied = func.tstzrange(Reservation.start_at, Reservation.blocked_until, literal("[)"))
+    return (Reservation.room_id == ROOM_ID, Reservation.status == "CONFIRMED",
+            occupied.op("&&")(func.tstzrange(start, end, literal("[)"))))
+
+
+def busy_query(start: datetime, end: datetime) -> Select:
+    return select(Reservation.start_at, Reservation.blocked_until).where(*occupying(start, end))
+
+
 def busy_between(db: Session, start: datetime, end: datetime) -> list[Busy]:
-    rows = db.execute(
-        select(Reservation.start_at, Reservation.blocked_until).where(
-            Reservation.room_id == ROOM_ID,
-            Reservation.status == "CONFIRMED",
-            Reservation.start_at < end,
-            Reservation.blocked_until > start,
-        )
-    )
-    return [(r.start_at, r.blocked_until) for r in rows]
+    return [(r.start_at, r.blocked_until) for r in db.execute(busy_query(start, end))]
 
 
 def build_quote(q: QuoteIn, rules: RuleSettings) -> Quote:
@@ -51,33 +80,21 @@ def evaluate_quote(db: Session, q: QuoteIn, now: datetime) -> tuple[Quote, str |
     return quote, None
 
 
-# ---- commands ----------------------------------------------------------------
-from datetime import timedelta
-from typing import Literal
-
-from sqlalchemy.exc import IntegrityError
-
-from app.core.clock import KST
-from app.models import Payment, User
-from app.services.payments import PaymentProvider
-
-OVERLAP_SQLSTATE = "23P01"
+def my_reservations_query(user_id: int) -> Select:
+    return select(Reservation).where(Reservation.user_id == user_id).order_by(Reservation.start_at, Reservation.id)
 
 
-class SlotUnavailable(Exception):
-    def __init__(self, reason: str = "SLOT_UNAVAILABLE"):
-        super().__init__(reason)
-        self.reason = reason
+def my_reservations(db: Session, user: User) -> list[Reservation]:
+    return list(db.scalars(my_reservations_query(user.id)))
 
 
-class CancelDeadlinePassed(Exception):
-    pass
+def get_for_update(db: Session, reservation_id: int) -> Reservation | None:
+    """Row-locked read for state changes, so concurrent cancels serialize and only one refunds."""
+    stmt = select(Reservation).where(Reservation.id == reservation_id).with_for_update().execution_options(populate_existing=True)
+    return db.scalars(stmt).first()
 
 
-class AlreadyCancelled(Exception):
-    pass
-
-
+# ---- commands ------------------------------------------------------------------------------------------------
 def is_overlap_error(e: IntegrityError) -> bool:
     return getattr(e.orig, "sqlstate", None) == OVERLAP_SQLSTATE
 
@@ -123,6 +140,7 @@ def guest_can_cancel(r: Reservation, now: datetime) -> bool:
 
 def cancel_reservation(db: Session, r: Reservation, by: Literal["GUEST", "ADMIN"], now: datetime,
                        payments: PaymentProvider) -> Reservation:
+    """`r` must come from get_for_update so the status check below sees the committed state."""
     if r.status == "CANCELLED":
         raise AlreadyCancelled()
     allowed = guest_can_cancel(r, now) if by == "GUEST" else now < r.start_at
@@ -136,23 +154,14 @@ def cancel_reservation(db: Session, r: Reservation, by: Literal["GUEST", "ADMIN"
     return r
 
 
-def my_reservations(db: Session, user: User) -> list[Reservation]:
-    return list(db.scalars(select(Reservation).where(Reservation.user_id == user.id)
-                           .order_by(Reservation.start_at)))
+# ---- admin ---------------------------------------------------------------------------------------------------
+def like_contains(q: str) -> str:
+    """'%q%' with LIKE wildcards in q taken literally (PostgreSQL's default LIKE escape is backslash)."""
+    return "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
 
-# ---- admin queries -----------------------------------------------------------
-from datetime import date
-
-from sqlalchemy import func, or_
-
-from app.core.clock import kst, today_kst
-
-BOOKING_TYPES = ("DAYUSE", "STAY")
-
-
-def admin_list(db: Session, *, date_from: date | None, date_to: date | None, type: str | None,
-               status: str | None, q: str | None, page: int, size: int) -> tuple[list[Reservation], int]:
+def admin_list_query(*, date_from: date | None, date_to: date | None, type: str | None, status: str | None,
+                     q: str | None) -> Select:
     conds = [Reservation.type.in_(BOOKING_TYPES)]
     if date_from:
         conds.append(Reservation.start_at >= kst(date_from))
@@ -163,12 +172,17 @@ def admin_list(db: Session, *, date_from: date | None, date_to: date | None, typ
     if status:
         conds.append(Reservation.status == status)
     if q:
-        like = f"%{q}%"
-        conds.append(or_(Reservation.code.ilike(like), Reservation.guest_name.ilike(like),
-                         Reservation.guest_phone.ilike(like)))
-    total = db.scalar(select(func.count()).select_from(Reservation).where(*conds))
-    items = db.scalars(select(Reservation).where(*conds).order_by(Reservation.start_at)
-                       .offset((page - 1) * size).limit(size))
+        like = like_contains(q)
+        conds.append(or_(Reservation.code.ilike(like), Reservation.guest_name.ilike(like), Reservation.guest_phone.ilike(like)))
+    # id breaks ties so pages never repeat or skip rows that share a start time
+    return select(Reservation).where(*conds).order_by(Reservation.start_at, Reservation.id)
+
+
+def admin_list(db: Session, *, date_from: date | None, date_to: date | None, type: str | None,
+               status: str | None, q: str | None, page: int, size: int) -> tuple[list[Reservation], int]:
+    stmt = admin_list_query(date_from=date_from, date_to=date_to, type=type, status=status, q=q)
+    total = db.scalar(select(func.count()).select_from(stmt.order_by(None).subquery()))
+    items = db.scalars(stmt.offset((page - 1) * size).limit(size))
     return list(items), total
 
 
@@ -192,17 +206,11 @@ def dashboard(db: Session, now: datetime) -> dict:
                                    Reservation.start_at < week_start + timedelta(days=7)),
         "month_revenue": db.scalar(select(func.coalesce(func.sum(Reservation.total_price), 0)).where(
             *booking, Reservation.start_at >= month_start, Reservation.start_at < next_month)),
-        "today_timeline": list(db.scalars(select(Reservation).where(
-            *confirmed, Reservation.start_at < day_end, Reservation.blocked_until > day_start)
-            .order_by(Reservation.start_at))),
+        "today_timeline": list(db.scalars(select(Reservation).where(*occupying(day_start, day_end))
+                                          .order_by(Reservation.start_at))),
         "upcoming": list(db.scalars(select(Reservation).where(*booking, Reservation.start_at > now)
-                                    .order_by(Reservation.start_at).limit(5))),
+                                    .order_by(Reservation.start_at, Reservation.id).limit(5))),
     }
-
-
-# ---- blocks ------------------------------------------------------------------
-class BlockOverlaps(Exception):
-    pass
 
 
 def create_block(db: Session, start: datetime, end: datetime, reason: str) -> Reservation:

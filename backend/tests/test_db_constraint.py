@@ -1,6 +1,6 @@
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -13,8 +13,12 @@ D23, D24 = date(2026, 10, 23), date(2026, 10, 24)
 
 
 def make(start: datetime, end: datetime, blocked: datetime, status: str = "CONFIRMED") -> Reservation:
+    cancelled = status == "CANCELLED"
     return Reservation(room_id=1, type="DAYUSE", status=status, start_at=start, end_at=end,
-                       blocked_until=blocked, guest_name="테스트", total_price=35000)
+                       blocked_until=blocked, guest_name="테스트", total_price=35000,
+                       cancel_deadline_at=start - timedelta(days=1),
+                       cancelled_at=start - timedelta(days=2) if cancelled else None,
+                       cancelled_by="GUEST" if cancelled else None)
 
 
 def insert(db, *args, **kw) -> Reservation:

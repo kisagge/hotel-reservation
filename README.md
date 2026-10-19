@@ -4,6 +4,7 @@
 
 - 디자인(Figma): https://www.figma.com/design/8rIYX31Lxdsoy8eHinf4ub
 - 설계 문서: [`docs/superpowers/specs/2026-10-19-hotel-booking-design.md`](docs/superpowers/specs/2026-10-19-hotel-booking-design.md)
+- 데이터 모델(ERD·제약·인덱스): [`docs/erd.md`](docs/erd.md)
 - 기술 스택: FastAPI, SQLAlchemy 2, Alembic, PostgreSQL 16 (백엔드) · Next.js 16, React 19, Tailwind 4, TanStack Query (프론트엔드)
 
 | 홈 | 대실 예약 | 내 예약 |
@@ -77,6 +78,8 @@ WHERE (status = 'CONFIRMED')
 - 같은 날 15:00 숙박이 있으면 대실은 14:00까지 끝나야 함
 
 여러 명이 같은 시각에 예약해도 한 명만 성공하고, 나머지는 500이 아니라 409를 받아요. 예약과 차단을 쓰기 전에 객실 행을 잠그기(`SELECT … FOR UPDATE`) 때문이에요. 이렇게 하면 겹침 제약 검사가 서로를 기다리다 교착(`40P01`)에 빠지지 않아요. 겹침 제약은 마지막 안전장치로 남겨둬요.
+
+같은 GiST 인덱스가 예약 가능 여부 조회에도 쓰여요. 그 밖의 무결성 규칙(예약 종류별 모양, 취소·환불 상태, 설정 범위)도 CHECK 제약으로 DB가 직접 지켜요. 내 예약, 어드민 목록과 검색, 대시보드도 인덱스를 써요. 예약 5만 건 기준으로 모든 주요 쿼리가 1ms 미만이에요. 자세한 내용은 [`docs/erd.md`](docs/erd.md)에 있어요.
 
 ### 2. 차단 일정도 같은 테이블에 있어요
 

@@ -16,6 +16,8 @@ describe("validateSettings", () => {
     expect(validateSettings({ ...ROOM.rules, stay_check_out_hour: 15 })).toHaveProperty("stay_check_out_hour", "체크아웃은 체크인보다 빨라야 해요");
     expect(validateSettings({ ...ROOM.rules, dayuse_first_start_hour: 21 })).toHaveProperty("dayuse_first_start_hour");
     expect(validateSettings({ ...ROOM.rules, stay_weekend_price: 0 })).toHaveProperty("stay_weekend_price", "0원보다 커야 해요");
+    expect(validateSettings({ ...ROOM.rules, stay_check_out_hour: 14, cleaning_buffer_minutes: 120 }))
+      .toHaveProperty("cleaning_buffer_minutes", "체크아웃 후 청소가 다음 체크인 전에 끝나야 해요");
   });
 });
 

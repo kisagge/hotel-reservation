@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUser
 from app.core.config import get_settings
@@ -23,7 +24,11 @@ def signup(body: SignupIn, db: DB, response: Response) -> User:
         raise HTTPException(status.HTTP_409_CONFLICT, "EMAIL_TAKEN")
     user = User(email=email, password_hash=hash_password(body.password), name=body.name, phone=body.phone)
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:  # lost a race with a concurrent signup for the same email
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "EMAIL_TAKEN")
     _set_session(response, user)
     return user
 

@@ -47,3 +47,11 @@ def test_tampered_token_401(client):
 
 def test_me_without_cookie_401(client):
     assert client.get("/api/auth/me").status_code == 401
+
+
+def test_concurrent_duplicate_signup_is_409_not_500(make_client):
+    from concurrent.futures import ThreadPoolExecutor
+    clients = [make_client() for _ in range(4)]
+    with ThreadPoolExecutor(4) as pool:
+        codes = sorted(pool.map(lambda c: c.post("/api/auth/signup", json=GUEST).status_code, clients))
+    assert codes == [201, 409, 409, 409]

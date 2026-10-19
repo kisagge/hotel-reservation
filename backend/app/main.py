@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -18,6 +19,11 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(OverflowError)
+    async def date_out_of_range(_: Request, __: OverflowError) -> JSONResponse:
+        # date + timedelta past year 9999 (e.g. ?date=9999-12-31) is bad input, not a server error
+        return JSONResponse({"detail": "DATE_OUT_OF_RANGE"}, status_code=422)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

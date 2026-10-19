@@ -225,6 +225,8 @@ class SettingsIn(PublicRules):
             raise ValueError("dayuse_first_start_hour must be <= dayuse_last_start_hour")
         if self.stay_check_out_hour >= self.stay_check_in_hour:
             raise ValueError("stay_check_out_hour must be < stay_check_in_hour")
+        if self.stay_check_out_hour * 60 + self.cleaning_buffer_minutes > self.stay_check_in_hour * 60:
+            raise ValueError("check-out plus cleaning buffer must end by check-in")
         return self
 
 

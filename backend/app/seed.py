@@ -52,7 +52,7 @@ def add_booking(db: Session, user: User | None, kind: str, quote: Quote, guest: 
     db.flush()
     r.code = f"HR-{w.start_at.astimezone(KST):%m%d}-{r.id:04d}"
     db.add(Payment(reservation_id=r.id, provider="MOCK", amount=quote.total,
-                   status="REFUNDED" if cancelled else "PAID"))
+                   status="REFUNDED" if cancelled else "PAID", refunded_at=r.cancelled_at))
 
 
 def seed_reservations(db: Session, demo: User) -> None:

@@ -73,3 +73,16 @@ def test_dashboard_counts(admin_client, db):
     assert d["month_revenue"] == 79000 + 35000 + 35000 + 178000
     assert [t["guest_name"] for t in d["today_timeline"]] == ["김민수", "이서연"]
     assert len(d["upcoming"]) == 3
+
+
+def test_list_order_is_stable_on_equal_start(admin_client, db):
+    a = book(db, kst(D(23), 15), kst(D(23), 19), kst(D(23), 20), status="CANCELLED", guest_name="A")
+    b = book(db, kst(D(23), 15), kst(D(23), 19), kst(D(23), 20), guest_name="B")
+    ids = [i["id"] for i in admin_client.get("/api/admin/reservations").json()["items"]]
+    assert ids == sorted([a.id, b.id])
+
+
+def test_search_treats_wildcards_literally(admin_client, db):
+    seed_mixed(db)
+    assert admin_client.get("/api/admin/reservations", params={"q": "%"}).json()["total"] == 0
+    assert admin_client.get("/api/admin/reservations", params={"q": "_"}).json()["total"] == 0
