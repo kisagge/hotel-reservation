@@ -5,6 +5,8 @@ import { api } from "./client";
 import type { components } from "./schema";
 
 export type User = components["schemas"]["UserOut"];
+export type Room = components["schemas"]["RoomOut"];
+export type Rules = Room["rules"];
 
 export class ApiError extends Error {
   constructor(public status: number, public code: unknown) {
@@ -62,4 +64,8 @@ export function useLogout() {
       qc.removeQueries({ queryKey: ["reservations"] });
     },
   });
+}
+
+export function useRoom() {
+  return useQuery({ queryKey: qk.room, queryFn: () => unwrap(api.GET("/api/room")) });
 }

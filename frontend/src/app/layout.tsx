@@ -27,8 +27,8 @@ export const viewport: Viewport = { themeColor: "#2e4a3f", width: "device-width"
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ko" className={`${notoSansKr.variable} ${gowunBatang.variable} h-full`}>
-      <body className="min-h-full">
+    <html lang="ko" className={`${notoSansKr.variable} ${gowunBatang.variable}`}>
+      <body className="min-h-dvh">
         <Providers>{children}</Providers>
       </body>
     </html>
