@@ -108,3 +108,17 @@ def admin_client(make_client, db):
     c = make_client()
     assert c.post("/api/auth/login", json=ADMIN).status_code == 200
     return c
+
+
+# ---- data helpers ---------------------------------------------------------
+from app.models import Reservation
+
+
+def book(db, start, end, blocked, *, type="DAYUSE", status="CONFIRMED", user_id=None, price=35000,
+         guest_name="테스트", nights=None, block_reason=None) -> Reservation:
+    r = Reservation(room_id=1, type=type, status=status, start_at=start, end_at=end, blocked_until=blocked,
+                    user_id=user_id, total_price=price, guest_name=guest_name, nights=nights,
+                    block_reason=block_reason)
+    db.add(r)
+    db.commit()
+    return r
