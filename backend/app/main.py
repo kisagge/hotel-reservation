@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import admin, auth, public, reservations
@@ -24,6 +27,8 @@ def create_app() -> FastAPI:
     app.include_router(public.router)
     app.include_router(reservations.router)
     app.include_router(admin.router)
+    Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
     return app
 
 

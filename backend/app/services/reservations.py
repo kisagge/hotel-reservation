@@ -205,3 +205,39 @@ def dashboard(db: Session, now: datetime) -> dict:
         "upcoming": list(db.scalars(select(Reservation).where(*booking, Reservation.start_at > now)
                                     .order_by(Reservation.start_at).limit(5))),
     }
+
+
+# ---- blocks ------------------------------------------------------------------
+class BlockOverlaps(Exception):
+    pass
+
+
+def create_block(db: Session, start: datetime, end: datetime, reason: str) -> Reservation:
+    """Blocks occupy exactly [start, end); the same exclusion constraint guards them against bookings."""
+    r = Reservation(room_id=ROOM_ID, type="BLOCK", status="CONFIRMED", start_at=start, end_at=end,
+                    blocked_until=end, block_reason=reason, total_price=0)
+    db.add(r)
+    try:
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        if is_overlap_error(e):
+            raise BlockOverlaps() from e
+        raise
+    except OperationalError as e:
+        db.rollback()
+        if is_deadlock(e):
+            raise BlockOverlaps() from e
+        raise
+    return r
+
+
+def upcoming_blocks(db: Session, now: datetime) -> list[Reservation]:
+    return list(db.scalars(select(Reservation).where(
+        Reservation.type == "BLOCK", Reservation.status == "CONFIRMED", Reservation.end_at > now)
+        .order_by(Reservation.start_at)))
+
+
+def delete_block(db: Session, r: Reservation, now: datetime) -> None:
+    r.status, r.cancelled_at, r.cancelled_by = "CANCELLED", now, "ADMIN"
+    db.commit()
