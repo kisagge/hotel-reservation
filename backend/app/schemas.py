@@ -157,3 +157,44 @@ class ReservationOut(BaseModel):
     created_at: KSTDatetime
     cancelled_at: KSTDatetime | None
     can_cancel: bool
+
+
+# ---- admin ----
+class PaymentOut(ORM):
+    provider: str
+    amount: int
+    status: str
+    paid_at: KSTDatetime
+    refunded_at: KSTDatetime | None
+
+
+class AdminReservationOut(ReservationOut):
+    user_email: str | None
+    cancelled_by: str | None
+    payment: PaymentOut | None
+
+
+class ReservationPage(BaseModel):
+    items: list[ReservationOut]
+    total: int
+    page: int
+    size: int
+
+
+class TimelineItem(ORM):
+    id: int
+    type: Literal["DAYUSE", "STAY", "BLOCK"]
+    start_at: KSTDatetime
+    end_at: KSTDatetime
+    blocked_until: KSTDatetime
+    guest_name: str
+    block_reason: str | None
+
+
+class DashboardOut(BaseModel):
+    today_check_ins: int
+    today_check_outs: int
+    week_reservations: int
+    month_revenue: int
+    today_timeline: list[TimelineItem]
+    upcoming: list[ReservationOut]

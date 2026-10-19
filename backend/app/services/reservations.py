@@ -146,3 +146,62 @@ def cancel_reservation(db: Session, r: Reservation, by: Literal["GUEST", "ADMIN"
 def my_reservations(db: Session, user: User) -> list[Reservation]:
     return list(db.scalars(select(Reservation).where(Reservation.user_id == user.id)
                            .order_by(Reservation.start_at)))
+
+
+# ---- admin queries -----------------------------------------------------------
+from datetime import date
+
+from sqlalchemy import func, or_
+
+from app.core.clock import kst, today_kst
+
+BOOKING_TYPES = ("DAYUSE", "STAY")
+
+
+def admin_list(db: Session, *, date_from: date | None, date_to: date | None, type: str | None,
+               status: str | None, q: str | None, page: int, size: int) -> tuple[list[Reservation], int]:
+    conds = [Reservation.type.in_(BOOKING_TYPES)]
+    if date_from:
+        conds.append(Reservation.start_at >= kst(date_from))
+    if date_to:
+        conds.append(Reservation.start_at < kst(date_to + timedelta(days=1)))
+    if type:
+        conds.append(Reservation.type == type)
+    if status:
+        conds.append(Reservation.status == status)
+    if q:
+        like = f"%{q}%"
+        conds.append(or_(Reservation.code.ilike(like), Reservation.guest_name.ilike(like),
+                         Reservation.guest_phone.ilike(like)))
+    total = db.scalar(select(func.count()).select_from(Reservation).where(*conds))
+    items = db.scalars(select(Reservation).where(*conds).order_by(Reservation.start_at)
+                       .offset((page - 1) * size).limit(size))
+    return list(items), total
+
+
+def dashboard(db: Session, now: datetime) -> dict:
+    today = today_kst(now)
+    day_start, day_end = kst(today), kst(today + timedelta(days=1))
+    week_start = kst(today - timedelta(days=today.weekday()))
+    month_start = kst(today.replace(day=1))
+    next_month = kst((today.replace(day=1) + timedelta(days=32)).replace(day=1))
+    confirmed = (Reservation.status == "CONFIRMED", Reservation.room_id == ROOM_ID)
+    booking = (*confirmed, Reservation.type.in_(BOOKING_TYPES))
+
+    def count(*conds) -> int:
+        return db.scalar(select(func.count()).select_from(Reservation).where(*booking, *conds))
+
+    return {
+        "today_check_ins": count(Reservation.start_at >= day_start, Reservation.start_at < day_end),
+        "today_check_outs": count(Reservation.type == "STAY", Reservation.end_at >= day_start,
+                                  Reservation.end_at < day_end),
+        "week_reservations": count(Reservation.start_at >= week_start,
+                                   Reservation.start_at < week_start + timedelta(days=7)),
+        "month_revenue": db.scalar(select(func.coalesce(func.sum(Reservation.total_price), 0)).where(
+            *booking, Reservation.start_at >= month_start, Reservation.start_at < next_month)),
+        "today_timeline": list(db.scalars(select(Reservation).where(
+            *confirmed, Reservation.start_at < day_end, Reservation.blocked_until > day_start)
+            .order_by(Reservation.start_at))),
+        "upcoming": list(db.scalars(select(Reservation).where(*booking, Reservation.start_at > now)
+                                    .order_by(Reservation.start_at).limit(5))),
+    }
