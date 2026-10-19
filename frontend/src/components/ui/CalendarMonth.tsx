@@ -19,12 +19,12 @@ export function CalendarMonth({ year, month, today, dayState, onSelect, onMonthC
   return (
     <div className="rounded-lg border border-line bg-surface px-2 pb-3 pt-4">
       <div className="flex items-center justify-between px-1 pb-2">
-        <button type="button" aria-label="이전 달" disabled={!canPrev} onClick={() => onMonthChange(-1)}
+        <button type="button" aria-label="이전 달" aria-disabled={!canPrev || undefined} onClick={() => canPrev && onMonthChange(-1)}
           className={cn("-m-2 flex size-11 items-center justify-center rounded-md", canPrev ? "text-ink" : "text-ink-disabled")}>
           <ChevronLeft className="size-5" strokeWidth={1.75} aria-hidden />
         </button>
         <h2 id={titleId} className="text-heading-m font-bold" aria-live="polite">{year}년 {month}월</h2>
-        <button type="button" aria-label="다음 달" disabled={!canNext} onClick={() => onMonthChange(1)}
+        <button type="button" aria-label="다음 달" aria-disabled={!canNext || undefined} onClick={() => canNext && onMonthChange(1)}
           className={cn("-m-2 flex size-11 items-center justify-center rounded-md", canNext ? "text-ink" : "text-ink-disabled")}>
           <ChevronRight className="size-5" strokeWidth={1.75} aria-hidden />
         </button>

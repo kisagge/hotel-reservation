@@ -26,18 +26,17 @@ export function useCreateReservation(q: QuoteIn | null) {
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: qk.myReservations });
       qc.invalidateQueries({ queryKey: qk.availability });
-      router.push(`/me/reservations?created=${r.code}`);
+      // replace: Back must not return to a checkout whose slot is now our own booking
+      router.replace(`/me/reservations?created=${r.code}`);
     },
     onError: (e) => {
+      inFlight.current = false; // only a failure re-arms the button; success keeps it locked until we leave
       if (e instanceof ApiError && e.status === 401) return router.push(loginHref(here));
       toast(errorMessage(e instanceof ApiError ? e.code : null), "danger");
       if (e instanceof ApiError && e.status === 409) {
         qc.invalidateQueries({ queryKey: qk.availability });
         router.push(bookingHref(q!));
       }
-    },
-    onSettled: () => {
-      inFlight.current = false;
     },
   });
 
@@ -46,5 +45,5 @@ export function useCreateReservation(q: QuoteIn | null) {
     inFlight.current = true;
     mutation.mutate(guest);
   };
-  return { submit, isPending: mutation.isPending };
+  return { submit, isPending: mutation.isPending || mutation.isSuccess };
 }

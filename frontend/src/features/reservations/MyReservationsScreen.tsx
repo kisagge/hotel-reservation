@@ -7,7 +7,9 @@ import { Splash } from "@/components/brand/Splash";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { useToast } from "@/components/ui/Toast";
-import { ApiError, useCancelReservation, useMyReservations, type Reservation } from "@/lib/api/queries";
+import { ScreenError } from "@/components/ui/ScreenError";
+import { ApiError, isUnauthorized, useCancelReservation, useMyReservations, type Reservation } from "@/lib/api/queries";
+import { loginHref } from "@/lib/authRedirect";
 import { errorMessage } from "@/lib/errors";
 import { formatRange } from "@/lib/format";
 import { ReservationCard } from "./ReservationCard";
@@ -30,6 +32,12 @@ export function MyReservationsScreen() {
     router.replace(pathname, { scroll: false });
   }, [created, pathname, router, toast]);
 
+  const signedOut = isUnauthorized(list.error);
+  useEffect(() => {
+    if (signedOut) router.replace(loginHref(pathname));
+  }, [signedOut, pathname, router]);
+
+  if (list.isError && !signedOut) return <ScreenError onRetry={() => list.refetch()} />;
   if (!list.data) return <Splash />;
   const upcoming = list.data.filter((r) => r.display_status === "CONFIRMED").sort((a, b) => a.start_at.localeCompare(b.start_at));
   const past = list.data.filter((r) => r.display_status !== "CONFIRMED").sort((a, b) => b.start_at.localeCompare(a.start_at));

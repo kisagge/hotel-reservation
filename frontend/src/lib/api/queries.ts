@@ -40,11 +40,17 @@ export function useMe() {
   });
 }
 
+/** A new session must never see the previous account's cached data; only public room info survives. */
+function startSession(qc: ReturnType<typeof useQueryClient>, user: User) {
+  qc.removeQueries({ predicate: (q) => q.queryKey[0] !== qk.room[0] });
+  qc.setQueryData(qk.me, user);
+}
+
 export function useLogin() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: components["schemas"]["LoginIn"]) => unwrap(api.POST("/api/auth/login", { body })),
-    onSuccess: (user) => qc.setQueryData(qk.me, user),
+    onSuccess: (user) => startSession(qc, user),
   });
 }
 
@@ -52,9 +58,11 @@ export function useSignup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: components["schemas"]["SignupIn"]) => unwrap(api.POST("/api/auth/signup", { body })),
-    onSuccess: (user) => qc.setQueryData(qk.me, user),
+    onSuccess: (user) => startSession(qc, user),
   });
 }
+
+export const isUnauthorized = (e: unknown) => e instanceof ApiError && e.status === 401;
 
 export function useLogout() {
   const qc = useQueryClient();

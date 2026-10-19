@@ -4,6 +4,7 @@ import { Clock } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 import { Splash } from "@/components/brand/Splash";
+import { ScreenError } from "@/components/ui/ScreenError";
 import { CalendarMonth, type DayState } from "@/components/ui/CalendarMonth";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
@@ -18,7 +19,9 @@ import { checkoutHref, useDayuseSlots, useQuote, useStayDays, type QuoteIn } fro
 
 type Tab = "dayuse" | "stay";
 const MONTHS_AHEAD = 3;
-const isYmd = (v: string | null): v is YMD => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+/** A real calendar date (rejects 2026-02-31 and friends). */
+const isYmd = (v: string | null): v is YMD => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v) && addDays(v, 0) === v;
+const isMonth = (v: string | null): v is string => !!v && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
 const monthOf = (d: YMD) => d.slice(0, 7);
 const shiftMonth = (m: string, delta: number) => {
   const [y, mo] = m.split("-").map(Number);
@@ -29,6 +32,7 @@ const shiftMonth = (m: string, delta: number) => {
 /** G2 (대실) / G3 (숙박). All selection state lives in the URL so reloads and "back" keep it. */
 export function BookingScreen() {
   const room = useRoom();
+  if (room.isError) return <ScreenError onRetry={() => room.refetch()} />;
   if (!room.data) return <Splash />;
   return <Booking rules={room.data.rules} />;
 }
@@ -51,15 +55,14 @@ function Booking({ rules }: { rules: Rules }) {
   };
 
   const date = isYmd(sp.get("date")) && sp.get("date")! >= today ? sp.get("date")! : null;
-  const hourRaw = Number(sp.get("hour"));
-  const hour = date && Number.isInteger(hourRaw) && sp.get("hour") ? hourRaw : null;
+  const hour = date && /^\d{1,2}$/.test(sp.get("hour") ?? "") ? Number(sp.get("hour")) : null;
   const range: StayRange = {
     checkIn: isYmd(sp.get("in")) && sp.get("in")! >= today ? sp.get("in") : null,
     checkOut: isYmd(sp.get("out")) ? sp.get("out") : null,
   };
   if (range.checkIn && range.checkOut && range.checkOut <= range.checkIn) range.checkOut = null;
   const anchor = tab === "dayuse" ? date : range.checkIn;
-  const viewMonthRaw = sp.get("m") ?? (anchor ? monthOf(anchor) : minMonth);
+  const viewMonthRaw = isMonth(sp.get("m")) ? sp.get("m")! : anchor ? monthOf(anchor) : minMonth;
   const viewMonth = viewMonthRaw < minMonth ? minMonth : viewMonthRaw > maxMonth ? maxMonth : viewMonthRaw;
   const [year, month] = viewMonth.split("-").map(Number);
 

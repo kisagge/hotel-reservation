@@ -26,6 +26,13 @@ describe("CalendarMonth", () => {
     expect(within(grid()).getByRole("button", { name: "19, 10월 19일 월요일, 오늘" })).toHaveAttribute("aria-current", "date");
   });
 
+  it("keeps month buttons focusable at the range limits", () => {
+    setup();
+    const prev = screen.getByRole("button", { name: "이전 달" });
+    expect(prev).toHaveAttribute("aria-disabled", "true");
+    expect(prev).not.toBeDisabled();
+  });
+
   it("ignores clicks on sold-out days and reports clicks on open days", async () => {
     const { onSelect, grid } = setup();
     await userEvent.click(within(grid()).getByRole("button", { name: /^27, / }));

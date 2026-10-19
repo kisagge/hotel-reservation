@@ -26,10 +26,12 @@ export function useStayDays(month: string) {
 }
 
 /** Server-side price + availability for an exact selection; the single source of truth before checkout. */
-export function useQuote(q: QuoteIn | null) {
+export function useQuote(q: QuoteIn | null, { fresh = false }: { fresh?: boolean } = {}) {
   return useQuery({
     queryKey: [...qk.availability, "quote", q],
     enabled: !!q,
+    // checkout must show the price that will actually be charged, never a cached one
+    ...(fresh && { staleTime: 0, refetchOnMount: "always" as const }),
     queryFn: () => unwrap(api.POST("/api/quotes", { body: q! })),
   });
 }

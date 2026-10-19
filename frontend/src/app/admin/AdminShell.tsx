@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { Splash } from "@/components/brand/Splash";
 import { Sidebar } from "@/components/admin/Sidebar";
+import { ScreenError } from "@/components/ui/ScreenError";
 import { useMe } from "@/lib/api/queries";
 import { loginHref } from "@/lib/authRedirect";
 
@@ -12,10 +13,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const me = useMe();
   const router = useRouter();
   const pathname = usePathname();
+  const search = useSearchParams().toString();
   useEffect(() => {
-    if (me.isSuccess && me.data === null) router.replace(loginHref(pathname));
-  }, [me.isSuccess, me.data, pathname, router]);
+    if (me.isSuccess && me.data === null) router.replace(loginHref(search ? `${pathname}?${search}` : pathname));
+  }, [me.isSuccess, me.data, pathname, search, router]);
 
+  if (me.isError) return <ScreenError onRetry={() => me.refetch()} />;
   if (!me.data) return <Splash />;
   if (me.data.role !== "ADMIN")
     return (

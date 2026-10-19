@@ -18,6 +18,14 @@ describe("ConfirmDialog accessibility", () => {
     expect(screen.getByRole("button", { name: "닫기" })).toHaveFocus();
   });
 
+  it("keeps focus where it is when the parent re-renders", async () => {
+    const props = { open: true, title: "예약을 취소할까요?", confirmLabel: "취소하기", onConfirm: vi.fn() } as const;
+    const { rerender } = render(<ConfirmDialog {...props} onClose={() => {}} />);
+    screen.getByRole("button", { name: "취소하기" }).focus();
+    rerender(<ConfirmDialog {...props} loading onClose={() => {}} />); // new inline onClose identity, like real callers
+    expect(screen.getByRole("button", { name: /취소하기/ })).toHaveFocus();
+  });
+
   it("closes on Escape", async () => {
     const { onClose } = setup();
     await userEvent.keyboard("{Escape}");

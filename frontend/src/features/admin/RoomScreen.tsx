@@ -18,7 +18,9 @@ const MAX_BYTES = 5 * 1024 * 1024;
 export function RoomScreen() {
   const room = useRoom();
   if (!room.data) return <div className="h-96 animate-pulse rounded-lg bg-muted" />;
-  return <RoomEditor key={JSON.stringify(room.data)} room={room.data} />;
+  const { name, description, capacity, bed, size_m2, amenities } = room.data;
+  // key on the editable fields only: a photo upload refetches the room but must not reset the text draft
+  return <RoomEditor key={JSON.stringify({ name, description, capacity, bed, size_m2, amenities })} room={room.data} />;
 }
 
 function RoomEditor({ room }: { room: Room }) {

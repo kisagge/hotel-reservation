@@ -77,6 +77,12 @@ describe("MyReservationsScreen", () => {
     expect(replace).toHaveBeenCalledWith("/me/reservations", { scroll: false });
   });
 
+  it("redirects to login when the session is no longer valid", async () => {
+    fakeApi({ "GET /api/reservations/me": () => json({ detail: "NOT_AUTHENTICATED" }, 401), "GET /api/room": () => json(ROOM) });
+    renderWithProviders(<MyReservationsScreen />);
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/login?next=%2Fme%2Freservations"));
+  });
+
   it("shows an empty state", async () => {
     fakeApi({ "GET /api/reservations/me": () => json([]), "GET /api/room": () => json(ROOM) });
     renderWithProviders(<MyReservationsScreen />);

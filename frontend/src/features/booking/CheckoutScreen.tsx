@@ -2,7 +2,7 @@
 
 import { CalendarDays, Check, Clock } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Splash } from "@/components/brand/Splash";
 import { Badge } from "@/components/ui/Badge";
@@ -10,7 +10,9 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { TextField } from "@/components/ui/TextField";
-import { useMe, useRoom, type Rules, type User } from "@/lib/api/queries";
+import { ScreenError } from "@/components/ui/ScreenError";
+import { ApiError, useMe, useRoom, type Rules, type User } from "@/lib/api/queries";
+import { loginHref } from "@/lib/authRedirect";
 import { errorMessage } from "@/lib/errors";
 import { formatDateKo, formatShortDate, formatTime, formatWon, weekdayKo } from "@/lib/format";
 import { kstParts } from "@/lib/time";
@@ -22,15 +24,26 @@ import { useQuote, type Quote, type QuoteIn } from "./useAvailability";
 export function CheckoutScreen() {
   const sp = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
   const q = parseCheckoutParams(new URLSearchParams(sp.toString()));
   const me = useMe();
   const room = useRoom();
-  const quote = useQuote(q);
+  const quote = useQuote(q, { fresh: true });
+  const signedOut = me.isSuccess && me.data === null;
 
   useEffect(() => {
     if (!q) router.replace("/book");
-  }, [q, router]);
+    else if (signedOut) router.replace(loginHref(`${pathname}?${sp}`));
+  }, [q, signedOut, router, pathname, sp]);
 
+  if (q && quote.error instanceof ApiError && quote.error.status === 422)
+    return (
+      <ScreenError title="이 예약은 진행할 수 없어요" message={errorMessage(quote.error.code)}>
+        <Link href={bookingHref(q)} className="flex h-10 items-center rounded-md bg-pine px-4 text-label font-medium text-white">다시 선택하기</Link>
+      </ScreenError>
+    );
+  const failed = [me, room, quote].find((x) => x.isError);
+  if (failed) return <ScreenError onRetry={() => [me, room, quote].forEach((x) => x.isError && x.refetch())} />;
   if (!q || !me.data || !room.data || !quote.data) return <Splash />;
   return <Checkout q={q} user={me.data} roomName={room.data.name} rules={room.data.rules} quote={quote.data} />;
 }

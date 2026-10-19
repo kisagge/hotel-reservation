@@ -12,15 +12,18 @@ export function ConfirmDialog({ open, title, body, confirmLabel, tone = "default
   onConfirm: () => void; onClose: () => void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
   const titleId = useId();
   const bodyId = useId();
+  useEffect(() => { closeRef.current = onClose; });
 
+  // Runs only when the dialog opens/closes, so parent re-renders (inline onClose, loading) never move focus.
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
     panel.current?.querySelector<HTMLElement>("button")?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+      if (e.key === "Escape") { e.preventDefault(); closeRef.current(); return; }
       if (e.key !== "Tab" || !panel.current) return;
       const items = [...panel.current.querySelectorAll<HTMLElement>("button:not([disabled])")];
       if (items.length === 0) return;
@@ -29,8 +32,12 @@ export function ConfirmDialog({ open, title, body, confirmLabel, tone = "default
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     };
     document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("keydown", onKey); opener?.focus?.(); };
-  }, [open, onClose]);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      // the opener (e.g. a cancelled card's button) may be gone; fall back to the page's main region
+      (opener?.isConnected ? opener : document.getElementById("main"))?.focus?.();
+    };
+  }, [open]);
 
   if (!open) return null;
   return (
