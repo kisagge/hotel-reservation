@@ -12,3 +12,5 @@ frontend/test-results/
 frontend/playwright-report/
 .playwright-mcp/
 frontend/next-env.d.ts
+backend/uploads-e2e/
+docs/screenshots/*.tmp
