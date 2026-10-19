@@ -122,3 +122,38 @@ class QuoteOut(BaseModel):
     total: int
     available: bool
     reason: Literal["SLOT_UNAVAILABLE", "IN_THE_PAST"] | None
+
+
+# ---- reservations ----
+class GuestInfo(BaseModel):
+    guest_name: str = Field(min_length=1, max_length=30)
+    guest_phone: str = Field(min_length=9, max_length=20)
+
+
+class DayUseReservationIn(DayUseQuoteIn, GuestInfo):
+    pass
+
+
+class StayReservationIn(StayQuoteIn, GuestInfo):
+    pass
+
+
+ReservationIn = Annotated[DayUseReservationIn | StayReservationIn, Field(discriminator="type")]
+
+
+class ReservationOut(BaseModel):
+    id: int
+    code: str | None
+    type: Literal["DAYUSE", "STAY", "BLOCK"]
+    status: Literal["CONFIRMED", "CANCELLED"]
+    display_status: Literal["CONFIRMED", "CANCELLED", "COMPLETED"]
+    start_at: KSTDatetime
+    end_at: KSTDatetime
+    blocked_until: KSTDatetime
+    nights: int | None
+    guest_name: str
+    guest_phone: str | None
+    total_price: int
+    created_at: KSTDatetime
+    cancelled_at: KSTDatetime | None
+    can_cancel: bool

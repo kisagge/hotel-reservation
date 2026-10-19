@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
 import pytest
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.core.clock import kst
 from app.core.db import SessionLocal
@@ -51,7 +51,11 @@ def test_concurrent_inserts_one_wins(db, room):
             try:
                 s.commit()
                 return "ok"
-            except IntegrityError:
+            except IntegrityError as e:
+                assert e.orig.sqlstate == "23P01"
+                return "conflict"
+            except OperationalError as e:  # simultaneous exclusion checks may deadlock instead
+                assert e.orig.sqlstate == "40P01"
                 return "conflict"
 
     with ThreadPoolExecutor(2) as pool:
