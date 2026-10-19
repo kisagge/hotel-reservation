@@ -26,7 +26,7 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
 function HourSelect({ label, value, onChange, invalid }: { label: string; value: number; onChange: (h: number) => void; invalid?: boolean }) {
   return (
     <select aria-label={label} value={value} onChange={(e) => onChange(Number(e.target.value))}
-      className={cn("h-11 w-[100px] rounded-md border bg-surface px-3 text-body-l outline-none focus:border-pine", invalid ? "border-danger" : "border-line-strong")}>
+      className={cn("h-11 w-[100px] rounded-md border bg-surface px-3 text-body-l outline-none focus:border-pine", invalid ? "border-danger" : "border-field")}>
       {HOURS.map((h) => <option key={h} value={h}>{hh(h)}</option>)}
     </select>
   );
@@ -81,8 +81,8 @@ export function SettingsForm({ initial, onSave, saving, aside }: {
                   {(["weekday", "weekend"] as const).map((day) => {
                     const k = `${key}_${day}_price` as (typeof PRICE_KEYS)[number];
                     return (
-                      <label key={k} className={cn("flex h-11 items-center gap-1.5 rounded-md border bg-surface px-3.5 focus-within:border-pine", errors[k] ? "border-danger" : "border-line-strong")}>
-                        <input aria-label={`${name} ${day === "weekday" ? "평일" : "주말"} 요금`} inputMode="numeric"
+                      <label key={k} className={cn("flex h-11 items-center gap-1.5 rounded-md border bg-surface px-3.5 focus-within:border-pine", errors[k] ? "border-danger" : "border-field")}>
+                        <input type="text" aria-label={`${name} ${day === "weekday" ? "평일" : "주말"} 요금`} inputMode="numeric"
                           value={v[k] ? v[k].toLocaleString("ko-KR") : ""}
                           onChange={(e) => set(k, Number(e.target.value.replace(/\D/g, "")) || 0)}
                           className="w-full bg-transparent text-right text-body-l outline-none" />

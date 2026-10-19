@@ -5,7 +5,7 @@ export function Stepper({ label, value, display, step = 1, min, max, onChange }:
   label: string; value: number; display: string; step?: number; min: number; max: number; onChange: (v: number) => void;
 }) {
   return (
-    <div className="flex h-11 items-center overflow-hidden rounded-md border border-line-strong bg-surface">
+    <div className="flex h-11 items-center overflow-hidden rounded-md border border-field bg-surface">
       <button type="button" aria-label={`${label} 줄이기`} disabled={value - step < min} onClick={() => onChange(value - step)}
         className="flex h-full w-10 items-center justify-center bg-canvas text-ink-2 disabled:text-ink-disabled">
         <Minus className="size-4" strokeWidth={2} />

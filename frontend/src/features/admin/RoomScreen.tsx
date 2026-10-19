@@ -65,7 +65,7 @@ function RoomEditor({ room }: { room: Room }) {
           <label className="flex flex-col gap-1.5">
             <span className="text-label font-medium text-ink-2">설명</span>
             <textarea rows={3} maxLength={2000} value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })}
-              className="rounded-md border border-line bg-surface px-4 py-3 text-body-l outline-none focus:border-[1.5px] focus:border-pine" />
+              className="rounded-md border border-field bg-surface px-4 py-3 text-body-l outline-none focus:border-[1.5px] focus:border-pine" />
           </label>
           <div className="grid grid-cols-3 gap-3">
             <TextField label="최대 인원" type="number" min={1} max={10} value={v.capacity} onChange={(e) => setV({ ...v, capacity: Number(e.target.value) })} />
@@ -78,16 +78,16 @@ function RoomEditor({ room }: { room: Room }) {
               {v.amenities.map((a) => (
                 <span key={a} className="flex items-center gap-1 rounded-full bg-pine-soft py-1 pl-3 pr-1.5 text-label font-medium text-pine">
                   {a}
-                  <button type="button" aria-label={`${a} 삭제`} onClick={() => setV({ ...v, amenities: v.amenities.filter((x) => x !== a) })}>
+                  <button type="button" aria-label={`${a} 삭제`} className="-m-1 flex size-6 items-center justify-center rounded-full" onClick={() => setV({ ...v, amenities: v.amenities.filter((x) => x !== a) })}>
                     <X className="size-3.5" />
                   </button>
                 </span>
               ))}
             </div>
             <div className="flex gap-2">
-              <input value={amenity} onChange={(e) => setAmenity(e.target.value)} maxLength={30} placeholder="예: 와이파이"
+              <input type="text" value={amenity} onChange={(e) => setAmenity(e.target.value)} maxLength={30} placeholder="예: 와이파이"
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAmenity(); } }}
-                aria-label="편의시설 추가" className="h-11 flex-1 rounded-md border border-line bg-surface px-4 text-body-m outline-none focus:border-pine" />
+                aria-label="편의시설 추가" className="h-11 flex-1 rounded-md border border-field bg-surface px-4 text-body-m outline-none focus:border-pine" />
               <Button variant="secondary" size="m" onClick={addAmenity}>추가</Button>
             </div>
           </div>
@@ -102,7 +102,7 @@ function RoomEditor({ room }: { room: Room }) {
               <div key={p.id} className="group relative aspect-[4/3] overflow-hidden rounded-md bg-muted">
                 <Image src={p.url} alt={`객실 사진 ${i + 1}`} fill sizes="180px" unoptimized loading={i < 2 ? "eager" : "lazy"} className="object-cover" />
                 <button type="button" aria-label={`사진 ${i + 1} 삭제`} onClick={() => remove.mutate(p.id, { onSuccess: () => toast("사진을 삭제했어요") })}
-                  className="absolute right-2 top-2 rounded-full bg-inverse/70 p-1.5 text-white">
+                  className="absolute right-1 top-1 flex size-9 items-center justify-center rounded-full bg-inverse/70 text-white">
                   <Trash2 className="size-4" />
                 </button>
               </div>

@@ -11,7 +11,7 @@ import { errorMessage } from "@/lib/errors";
 import { formatAdminRange } from "@/lib/format";
 
 const toKstIso = (local: string) => `${local}:00+09:00`; // datetime-local value is entered as KST wall time
-const input = "h-11 rounded-md border border-line-strong bg-surface px-3 text-body-m outline-none focus:border-pine";
+const input = "h-11 rounded-md border border-field bg-surface px-3 text-body-m outline-none focus:border-pine";
 
 /** A3 "차단 일정" card (anchor #blocks). */
 export function BlocksCard() {

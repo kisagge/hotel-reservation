@@ -35,7 +35,7 @@ export function DayTimeline({ items, day, height = 64, compact = false, segments
                     {s.kind === "CLEANING" || s.kind === "FREE" ? KIND_KO[s.kind] : compact ? `${KIND_KO[s.kind]} ${s.fromHour === 0 ? `~${hhmm(s.toHour)}` : hhmm(s.fromHour)}` : `${KIND_KO[s.kind]}${s.label ? ` · ${s.label}` : ""}`}
                   </span>
                   {!compact && s.kind !== "CLEANING" && (
-                    <span className="text-caption opacity-80">{s.kind === "FREE" ? `${hhmm(s.fromHour)} 이후` : `${hhmm(s.fromHour)} – ${hhmm(s.toHour)}`}</span>
+                    <span className="text-caption">{s.kind === "FREE" ? `${hhmm(s.fromHour)} 이후` : `${hhmm(s.fromHour)} – ${hhmm(s.toHour)}`}</span>
                   )}
                 </>
               )}

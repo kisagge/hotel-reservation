@@ -19,7 +19,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   if (!me.data) return <Splash />;
   if (me.data.role !== "ADMIN")
     return (
-      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-canvas text-center">
+      <main id="main" tabIndex={-1} className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-canvas text-center">
         <p className="font-display text-display-m font-bold">접근 권한이 없어요</p>
         <p className="text-body-m text-ink-2">관리자 계정으로 로그인해 주세요.</p>
         <Link href="/" className="rounded-md bg-pine px-6 py-3 text-heading-s font-bold text-white">홈으로</Link>
@@ -28,7 +28,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh min-w-[1200px] bg-canvas">
       <Sidebar user={me.data} />
-      <main className="flex min-w-0 flex-1 flex-col gap-6 px-10 pb-10 pt-9">{children}</main>
+      <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col gap-6 px-10 pb-10 pt-9">{children}</main>
     </div>
   );
 }

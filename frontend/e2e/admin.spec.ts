@@ -20,7 +20,7 @@ test("a block added in settings closes those stay days for guests", async ({ pag
   await expect(page.locator("#blocks")).toContainText("E2E 점검");
 
   await page.goto(`/book?tab=stay&m=${monthParam(from)}`);
-  await expect(dayCell(page, from)).toHaveAttribute("aria-label", /예약 마감/);
+  await expect(dayCell(page, from)).toHaveAccessibleName(/예약 마감/);
 });
 
 test("changing the weekday day-use price shows up in the guest quote", async ({ page }) => {

@@ -50,7 +50,7 @@ function Checkout({ q, user, roomName, rules, quote }: { q: QuoteIn; user: User;
   const valid = name.trim().length > 0 && phone.trim().length >= 9;
 
   return (
-    <main className="flex flex-1 flex-col">
+    <main id="main" tabIndex={-1} className="flex flex-1 flex-col">
       <MobileHeader title="예약 확인" back={bookingHref(q)} />
       <div className="flex flex-col gap-7 px-4 pb-6 pt-2">
         <section className="flex flex-col gap-2.5 rounded-lg border border-line bg-surface p-4">
@@ -117,7 +117,7 @@ function Checkout({ q, user, roomName, rules, quote }: { q: QuoteIn; user: User;
         <label className="flex cursor-pointer items-center gap-2.5">
           <input type="checkbox" className="peer sr-only" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
           <span aria-hidden className={cn("flex size-[22px] items-center justify-center rounded-[6px] border",
-            agreed ? "border-pine bg-pine text-white" : "border-line-strong bg-surface", "peer-focus-visible:ring-2 peer-focus-visible:ring-pine/40")}>
+            agreed ? "border-pine bg-pine text-white" : "border-field bg-surface", "peer-focus-visible:ring-2 peer-focus-visible:ring-pine/40")}>
             {agreed && <Check className="size-4" strokeWidth={2.5} />}
           </span>
           <span className="text-body-m font-medium">예약 정보와 취소 규정을 확인했어요</span>

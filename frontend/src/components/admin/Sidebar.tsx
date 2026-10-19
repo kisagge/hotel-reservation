@@ -20,7 +20,7 @@ export function Sidebar({ user }: { user: User }) {
   const router = useRouter();
   const logout = useLogout();
   return (
-    <aside className="sticky top-0 flex h-dvh w-[248px] shrink-0 flex-col gap-1 border-r border-line bg-surface px-4 pb-6 pt-7">
+    <aside aria-label="관리자 메뉴" className="sticky top-0 flex h-dvh w-[248px] shrink-0 flex-col gap-1 border-r border-line bg-surface px-4 pb-6 pt-7">
       <Link href="/admin" className="flex items-center gap-2 px-3 pb-7">
         <span className="font-display text-display-s font-bold">HARU</span>
         <span className="rounded-sm bg-inverse px-1.5 py-0.5 text-caption text-white">ADMIN</span>
@@ -46,8 +46,8 @@ export function Sidebar({ user }: { user: User }) {
           <span className="truncate text-caption text-ink-3">{user.email}</span>
         </div>
         <button type="button" aria-label="로그아웃" onClick={() => logout.mutate(undefined, { onSuccess: () => router.replace("/login") })}
-          className="text-ink-3 hover:text-ink">
-          <LogOut className="size-[18px]" strokeWidth={1.75} />
+          className="-m-2 flex size-11 items-center justify-center rounded-md text-ink-3 hover:text-ink">
+          <LogOut className="size-[18px]" strokeWidth={1.75} aria-hidden />
         </button>
       </div>
     </aside>

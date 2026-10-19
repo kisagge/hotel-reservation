@@ -14,7 +14,7 @@ export function HomeView({ room, loggedIn }: { room: Room; loggedIn: boolean }) 
   const shown = room.photos.slice(0, 2);
   const more = Math.max(room.photos.length - 2, 0);
   return (
-    <main className="flex flex-1 flex-col">
+    <main id="main" tabIndex={-1} className="flex flex-1 flex-col">
       <header className="flex items-center justify-between px-5 pb-3 pt-4">
         <div className="flex items-center gap-2">
           <span className="font-display text-display-s font-bold">HARU</span>

@@ -8,18 +8,19 @@
   --color-inverse: #1f1c19;
   --color-ink: #1f1c19;
   --color-ink-2: #6b645c;
-  --color-ink-3: #a39b90;
+  --color-ink-3: #726c65; /* 4.6:1 on canvas (was #a39b90, 2.4:1) */
   --color-ink-disabled: #b8b0a5;
   --color-line: #e2dace;
   --color-line-strong: #cfc5b6;
+  --color-field: #918a7f; /* form control borders, 3.4:1 non-text contrast */
   --color-pine: #2e4a3f;
   --color-pine-hover: #233a31;
   --color-pine-soft: #dce6e0;
-  --color-amber: #b8692a;
+  --color-amber: #9b5823; /* 4.5:1 on amber-soft (was #b8692a) */
   --color-amber-soft: #f6e6d3;
-  --color-danger: #b4432f;
+  --color-danger: #af412e;
   --color-danger-soft: #f5deda;
-  --color-success: #3d7a55;
+  --color-success: #3b7552;
   --color-success-soft: #ddeee2;
   --color-disabled: #e7e1d8;
 
@@ -69,6 +70,16 @@
 @theme inline {
   --font-sans: var(--font-noto-sans-kr), system-ui, sans-serif;
   --font-display: var(--font-gowun-batang), serif;
+}
+
+main:focus {
+  outline: none; /* skip-link target; focus lands here programmatically */
+}
+
+/* Visible keyboard focus everywhere (WCAG 2.4.7). */
+:focus-visible {
+  outline: 2px solid var(--color-pine);
+  outline-offset: 2px;
 }
 
 body {

@@ -1,5 +1,4 @@
 import { expect, type Page } from "@playwright/test";
-import { formatDateKo } from "../src/lib/format";
 import { addDays, todayKst, weekdayKst, type YMD } from "../src/lib/time";
 
 export const DEMO = { email: "haru@example.com", password: "haru1234" };
@@ -35,4 +34,4 @@ export async function login(page: Page, who: { email: string; password: string }
 }
 
 /** Calendar cell for a KST date (opens the right month via the `m` URL param on the booking page). */
-export const dayCell = (page: Page, d: YMD) => page.getByRole("gridcell", { name: new RegExp(`^${formatDateKo(d).replace(/[()]/g, "\\$&")}`) });
+export const dayCell = (page: Page, d: YMD) => page.getByRole("table").getByRole("button", { name: new RegExp(`^${Number(d.slice(8))}, `) });

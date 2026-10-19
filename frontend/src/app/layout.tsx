@@ -29,6 +29,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className={`${notoSansKr.variable} ${gowunBatang.variable}`}>
       <body className="min-h-dvh">
+        <a href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-pine focus:px-4 focus:py-3 focus:text-heading-s focus:font-bold focus:text-white">
+          본문으로 건너뛰기
+        </a>
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -101,10 +101,10 @@ function Booking({ rules }: { rules: Rules }) {
       : range.checkIn && range.checkOut && q ? { caption: `${formatShortDate(range.checkIn)} → ${formatShortDate(range.checkOut)} · 숙박`, title: `${nights}박 · 체크인 ${formatTime(q.start_at)}` } : null;
 
   return (
-    <main className="flex flex-1 flex-col">
+    <main id="main" tabIndex={-1} className="flex flex-1 flex-col">
       <MobileHeader title="예약하기" back="/" />
       <div className="px-4 pb-2 pt-1">
-        <SegmentedTabs items={[{ value: "dayuse", label: "대실" }, { value: "stay", label: "숙박" }]} value={tab}
+        <SegmentedTabs label="예약 유형" items={[{ value: "dayuse", label: "대실" }, { value: "stay", label: "숙박" }]} value={tab}
           onChange={(t) => router.replace(`${pathname}?tab=${t}`, { scroll: false })} />
       </div>
 

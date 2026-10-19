@@ -11,7 +11,7 @@ import { PAGE_SIZE, useAdminReservations } from "@/lib/api/adminQueries";
 import { todayKst } from "@/lib/time";
 import { filtersFromSearch, filtersToSearch, type AdminFilters } from "./filters";
 
-const chip = "h-11 rounded-md border border-line bg-surface px-3.5 text-body-m font-medium outline-none focus:border-pine";
+const chip = "h-11 rounded-md border border-field bg-surface px-3.5 text-body-m font-medium outline-none focus:border-pine";
 
 /** A2 · 예약 관리 (Figma 11:52). Filters and the selected row live in the URL. */
 export function ReservationsScreen() {
@@ -38,15 +38,17 @@ export function ReservationsScreen() {
     <>
       <AdminPageHeader title="예약 관리" subtitle="대실·숙박 예약을 한곳에서 확인하고 관리해요"
         actions={
-          <div role="tablist" className="flex gap-1 rounded-md bg-muted p-1">
-            <span role="tab" aria-selected className="flex h-9 items-center rounded-sm bg-surface px-6 text-heading-s font-bold shadow-card">목록</span>
-            <span role="tab" aria-disabled title="준비 중" className="flex h-9 cursor-not-allowed items-center px-6 text-body-m font-medium text-ink-3">캘린더</span>
+          <div role="group" aria-label="보기 방식" className="flex gap-1 rounded-md bg-muted p-1">
+            <button type="button" aria-pressed="true" className="flex h-9 items-center rounded-sm bg-surface px-6 text-heading-s font-bold shadow-card">목록</button>
+            <button type="button" aria-pressed="false" aria-disabled="true" aria-describedby="calendar-soon" title="준비 중"
+              className="flex h-9 cursor-not-allowed items-center px-6 text-body-m font-medium text-ink-3">캘린더</button>
+            <span id="calendar-soon" className="sr-only">준비 중</span>
           </div>
         } />
       <div className="flex items-center gap-3">
-        <label className="flex h-11 flex-1 items-center gap-2 rounded-md border border-line bg-surface px-3.5 focus-within:border-pine">
+        <label className="flex h-11 flex-1 items-center gap-2 rounded-md border border-field bg-surface px-3.5 focus-within:border-pine">
           <Search className="size-[18px] text-ink-3" strokeWidth={1.75} aria-hidden />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="예약번호, 예약자 이름, 연락처로 검색"
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="예약번호, 예약자 이름, 연락처로 검색"
             aria-label="예약 검색" className="flex-1 bg-transparent text-body-m outline-none placeholder:text-ink-3" />
         </label>
         <input type="date" aria-label="시작일" className={chip} value={f.from} onChange={(e) => e.target.value && set({ from: e.target.value })} />

@@ -44,7 +44,7 @@ export function MyReservationsScreen() {
   };
 
   return (
-    <main className="flex flex-1 flex-col">
+    <main id="main" tabIndex={-1} className="flex flex-1 flex-col">
       <MobileHeader title="내 예약" back="/" />
       {list.data.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 pb-24 text-center">
