@@ -125,3 +125,15 @@ def test_display_status_completed(user_client, clock):
     item = user_client.get("/api/reservations/me").json()[0]
     assert item["display_status"] == "COMPLETED"
     assert item["can_cancel"] is False
+
+
+def test_many_concurrent_creates_never_500(user_client, make_client):
+    """Review: 3+ simultaneous submits used to deadlock twice and leak a 500."""
+    clients = [user_client] + [make_client() for _ in range(4)]
+    for c in clients[1:]:
+        c.cookies.update(user_client.cookies)
+    for day in range(23, 28):
+        body = {**DAYUSE_23_15, "date": f"2026-10-{day}"}
+        with ThreadPoolExecutor(len(clients)) as pool:
+            codes = sorted(pool.map(lambda c: c.post("/api/reservations", json=body).status_code, clients))
+        assert codes == [201, 409, 409, 409, 409], f"day {day}: {codes}"

@@ -156,6 +156,7 @@ class ReservationOut(BaseModel):
     total_price: int
     created_at: KSTDatetime
     cancelled_at: KSTDatetime | None
+    cancel_deadline_at: KSTDatetime | None
     can_cancel: bool
 
 

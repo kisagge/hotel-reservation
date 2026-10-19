@@ -104,6 +104,7 @@ class Reservation(Base):
     block_reason: Mapped[str | None] = mapped_column(String(100))
     total_price: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = _ts(server_default=func.now())
+    cancel_deadline_at: Mapped[datetime | None] = _ts()  # guest policy snapshot taken at booking time
     cancelled_at: Mapped[datetime | None] = _ts()
     cancelled_by: Mapped[str | None] = mapped_column(String(10))
 

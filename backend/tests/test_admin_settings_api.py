@@ -104,3 +104,16 @@ def test_photo_rejects_non_image(admin_client, tmp_path, monkeypatch):
     monkeypatch.setattr(get_settings(), "upload_dir", str(tmp_path))
     res = admin_client.post("/api/admin/room/photos", files={"file": ("notes.txt", b"hello", "text/plain")})
     assert res.status_code == 422
+
+
+def test_cancel_deadline_change_keeps_existing_bookings(admin_client, user_client, clock):
+    """Review: settings apply to new reservations only — including the guest cancel deadline."""
+    first = user_client.post("/api/reservations", json={"type": "DAYUSE", "date": "2026-10-23", "start_hour": 15,
+                                                         **GUEST_INFO}).json()
+    assert first["cancel_deadline_at"] == "2026-10-22T15:00:00+09:00"
+    put_settings(admin_client, guest_cancel_deadline_hours=72)
+    second = user_client.post("/api/reservations", json={"type": "DAYUSE", "date": "2026-10-25", "start_hour": 15,
+                                                          **GUEST_INFO}).json()
+    assert second["cancel_deadline_at"] == "2026-10-22T15:00:00+09:00"
+    clock.set(kst(D(21), 12))
+    assert user_client.post(f"/api/reservations/{first['id']}/cancel").status_code == 200

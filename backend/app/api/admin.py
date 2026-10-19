@@ -34,7 +34,7 @@ def get_booking(db, reservation_id: int) -> Reservation:
 
 
 def to_admin_out(r: Reservation, now: datetime, db) -> AdminReservationOut:
-    base = to_out(r, now, svc.load_rules(db))
+    base = to_out(r, now)
     return AdminReservationOut(**base.model_dump(), user_email=r.user.email if r.user else None,
                                cancelled_by=r.cancelled_by,
                                payment=PaymentOut.model_validate(r.payment) if r.payment else None)
@@ -50,8 +50,7 @@ def list_reservations(
 ) -> ReservationPage:
     items, total = svc.admin_list(db, date_from=date_from, date_to=date_to, type=type, status=status, q=q,
                                   page=page, size=size)
-    rules = svc.load_rules(db)
-    return ReservationPage(items=[to_out(r, now, rules) for r in items], total=total, page=page, size=size)
+    return ReservationPage(items=[to_out(r, now) for r in items], total=total, page=page, size=size)
 
 
 @router.get("/reservations/{reservation_id}", response_model=AdminReservationOut)
@@ -69,11 +68,10 @@ def admin_cancel(reservation_id: int, db: DB, now: Now, payments: Payments) -> A
 @router.get("/dashboard", response_model=DashboardOut)
 def get_dashboard(db: DB, now: Now) -> DashboardOut:
     d = svc.dashboard(db, now)
-    rules = svc.load_rules(db)
     return DashboardOut(**{k: d[k] for k in ("today_check_ins", "today_check_outs", "week_reservations",
                                              "month_revenue")},
                         today_timeline=[TimelineItem.model_validate(r) for r in d["today_timeline"]],
-                        upcoming=[to_out(r, now, rules) for r in d["upcoming"]])
+                        upcoming=[to_out(r, now) for r in d["upcoming"]])
 
 
 # ---- settings ----

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.availability import Busy, overlaps
 from app.domain.rules import Quote, RuleSettings, quote_dayuse, quote_stay
-from app.models import Reservation, RoomSettings
+from app.models import Reservation, Room, RoomSettings
 from app.schemas import QuoteIn
 
 ROOM_ID = 1
@@ -55,14 +55,13 @@ def evaluate_quote(db: Session, q: QuoteIn, now: datetime) -> tuple[Quote, str |
 from datetime import timedelta
 from typing import Literal
 
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import IntegrityError
 
 from app.core.clock import KST
 from app.models import Payment, User
 from app.services.payments import PaymentProvider
 
 OVERLAP_SQLSTATE = "23P01"
-DEADLOCK_SQLSTATE = "40P01"  # two concurrent conflicting inserts wait on each other's exclusion check
 
 
 class SlotUnavailable(Exception):
@@ -83,35 +82,28 @@ def is_overlap_error(e: IntegrityError) -> bool:
     return getattr(e.orig, "sqlstate", None) == OVERLAP_SQLSTATE
 
 
-def is_deadlock(e: OperationalError) -> bool:
-    return getattr(e.orig, "sqlstate", None) == DEADLOCK_SQLSTATE
+def lock_room(db: Session) -> None:
+    """Serialize occupancy writes for the room until commit. Concurrent inserts racing inside the exclusion
+    check deadlock each other (40P01); taking this row lock first means the check never sees two inserters,
+    and the quote evaluated after it already sees the winner."""
+    db.execute(select(Room.id).where(Room.id == ROOM_ID).with_for_update())
 
 
 def create_reservation(db: Session, user: User, q: QuoteIn, guest_name: str, guest_phone: str, now: datetime,
                        payments: PaymentProvider) -> Reservation:
-    """Insert a CONFIRMED reservation; a deadlock with a concurrent insert is retried once, after which the
-    re-evaluated quote sees the winner and raises SlotUnavailable."""
-    try:
-        return _insert_reservation(db, user, q, guest_name, guest_phone, now, payments)
-    except OperationalError as e:
-        db.rollback()
-        if not is_deadlock(e):
-            raise
-    return _insert_reservation(db, user, q, guest_name, guest_phone, now, payments)
-
-
-def _insert_reservation(db: Session, user: User, q: QuoteIn, guest_name: str, guest_phone: str, now: datetime,
-                        payments: PaymentProvider) -> Reservation:
+    lock_room(db)
     quote, reason = evaluate_quote(db, q, now)
     if reason:
         raise SlotUnavailable(reason)
     w = quote.window
+    rules = load_rules(db)
     r = Reservation(room_id=ROOM_ID, user_id=user.id, type=q.type, status="CONFIRMED", start_at=w.start_at,
                     end_at=w.end_at, blocked_until=w.blocked_until, nights=quote.nights, guest_name=guest_name,
-                    guest_phone=guest_phone, total_price=quote.total)
+                    guest_phone=guest_phone, total_price=quote.total,
+                    cancel_deadline_at=w.start_at - timedelta(hours=rules.guest_cancel_deadline_hours))
     db.add(r)
     try:
-        db.flush()  # the exclusion constraint decides races here
+        db.flush()  # the exclusion constraint stays the backstop
     except IntegrityError as e:
         db.rollback()
         if is_overlap_error(e):
@@ -124,15 +116,16 @@ def _insert_reservation(db: Session, user: User, q: QuoteIn, guest_name: str, gu
     return r
 
 
-def guest_can_cancel(r: Reservation, now: datetime, rules: RuleSettings) -> bool:
-    return r.status == "CONFIRMED" and now <= r.start_at - timedelta(hours=rules.guest_cancel_deadline_hours)
+def guest_can_cancel(r: Reservation, now: datetime) -> bool:
+    """Uses the deadline captured at booking time, so later settings changes never apply retroactively."""
+    return r.status == "CONFIRMED" and r.cancel_deadline_at is not None and now <= r.cancel_deadline_at
 
 
 def cancel_reservation(db: Session, r: Reservation, by: Literal["GUEST", "ADMIN"], now: datetime,
-                       rules: RuleSettings, payments: PaymentProvider) -> Reservation:
+                       payments: PaymentProvider) -> Reservation:
     if r.status == "CANCELLED":
         raise AlreadyCancelled()
-    allowed = guest_can_cancel(r, now, rules) if by == "GUEST" else now < r.start_at
+    allowed = guest_can_cancel(r, now) if by == "GUEST" else now < r.start_at
     if not allowed:
         raise CancelDeadlinePassed()
     r.status, r.cancelled_at, r.cancelled_by = "CANCELLED", now, by
@@ -214,6 +207,7 @@ class BlockOverlaps(Exception):
 
 def create_block(db: Session, start: datetime, end: datetime, reason: str) -> Reservation:
     """Blocks occupy exactly [start, end); the same exclusion constraint guards them against bookings."""
+    lock_room(db)
     r = Reservation(room_id=ROOM_ID, type="BLOCK", status="CONFIRMED", start_at=start, end_at=end,
                     blocked_until=end, block_reason=reason, total_price=0)
     db.add(r)
@@ -222,11 +216,6 @@ def create_block(db: Session, start: datetime, end: datetime, reason: str) -> Re
     except IntegrityError as e:
         db.rollback()
         if is_overlap_error(e):
-            raise BlockOverlaps() from e
-        raise
-    except OperationalError as e:
-        db.rollback()
-        if is_deadlock(e):
             raise BlockOverlaps() from e
         raise
     return r

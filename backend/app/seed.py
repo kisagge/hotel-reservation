@@ -44,6 +44,7 @@ def add_booking(db: Session, user: User | None, kind: str, quote: Quote, guest: 
     r = Reservation(room_id=ROOM_ID, user_id=user.id if user else None, type=kind, start_at=w.start_at,
                     end_at=w.end_at, blocked_until=w.blocked_until, nights=quote.nights, guest_name=guest[0],
                     guest_phone=guest[1], total_price=quote.total,
+                    cancel_deadline_at=w.start_at - timedelta(hours=24),
                     status="CANCELLED" if cancelled else "CONFIRMED")
     if cancelled:
         r.cancelled_at, r.cancelled_by = w.start_at - timedelta(days=2), "GUEST"
