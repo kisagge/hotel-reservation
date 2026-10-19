@@ -1,3 +1,4 @@
+import threading
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -9,12 +10,33 @@ _hasher = PasswordHash.recommended()
 ALGORITHM = "HS256"
 
 
+_limiter: threading.BoundedSemaphore | None = None
+_limiter_guard = threading.Lock()
+
+
+def _hash_slot() -> threading.BoundedSemaphore:
+    """Per-process cap on concurrent argon2 work (each call allocates ~64 MB); extra callers queue."""
+    global _limiter
+    with _limiter_guard:
+        if _limiter is None:
+            _limiter = threading.BoundedSemaphore(get_settings().password_hash_concurrency)
+        return _limiter
+
+
+def reset_hash_limiter() -> None:
+    global _limiter
+    with _limiter_guard:
+        _limiter = None
+
+
 def hash_password(pw: str) -> str:
-    return _hasher.hash(pw)
+    with _hash_slot():
+        return _hasher.hash(pw)
 
 
 def verify_password(pw: str, hashed: str) -> bool:
-    return _hasher.verify(pw, hashed)
+    with _hash_slot():
+        return _hasher.verify(pw, hashed)
 
 
 def create_access_token(user_id: int, role: str) -> str:

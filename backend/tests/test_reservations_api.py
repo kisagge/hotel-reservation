@@ -158,3 +158,88 @@ def test_far_future_dates_are_422_not_500(client):
     res = client.post("/api/quotes", json={"type": "STAY", "check_in": "9999-12-30", "nights": 2})
     assert res.status_code == 422
     assert client.get("/api/availability/dayuse", params={"date": "9999-12-31"}).status_code == 422
+
+
+# ---- contention: the room lock must never be what a doomed request waits on ----------------------------------
+import time as _time
+
+from sqlalchemy import text as _text
+
+from app.core.config import get_settings
+from app.core.db import SessionLocal
+from app.domain.rules import RuleSettings
+
+
+def _hold_day_lock(day):
+    """Another server holding the write lock for one KST day (same keys the service uses)."""
+    from app.services import reservations as svc_mod
+    s = SessionLocal()
+    for room, ordinal in svc_mod.day_lock_keys(kst(day), kst(day) + timedelta(hours=1)):
+        s.execute(_text("SELECT pg_advisory_xact_lock(:r, :o)"), {"r": room, "o": ordinal})
+    return s  # caller must rollback/close
+
+
+def _hold_room_lock():
+    return _hold_day_lock(D23)
+
+
+def test_taken_slot_fails_fast_without_waiting_for_the_room_lock(user_client, db):
+    book(db, kst(D23, 15), kst(D23, 19), kst(D23, 20))
+    holder = _hold_room_lock()
+    try:
+        t = _time.perf_counter()
+        res = user_client.post("/api/reservations", json=DAYUSE_23_15)
+        assert res.status_code == 409
+        assert _time.perf_counter() - t < 0.5
+    finally:
+        holder.rollback(); holder.close()
+
+
+def test_lock_wait_is_capped_and_retryable(user_client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "booking_lock_timeout_ms", 200)
+    holder = _hold_room_lock()
+    try:
+        t = _time.perf_counter()
+        res = user_client.post("/api/reservations", json=DAYUSE_23_15)
+        assert res.status_code == 503
+        assert res.json()["detail"] == "SERVICE_BUSY"
+        assert _time.perf_counter() - t < 2
+    finally:
+        holder.rollback(); holder.close()
+    assert user_client.post("/api/reservations", json=DAYUSE_23_15).status_code == 201  # nothing half-written
+
+
+def test_one_booking_uses_one_settings_snapshot(user_client, monkeypatch):
+    """If an admin edits settings mid-booking, price/buffer and cancel deadline must still come from the same read."""
+    from app.services import reservations as svc_mod
+    reads = iter([RuleSettings(guest_cancel_deadline_hours=24), RuleSettings(guest_cancel_deadline_hours=72)] * 5)
+    monkeypatch.setattr(svc_mod, "load_rules", lambda db: next(reads))
+    body = user_client.post("/api/reservations", json=DAYUSE_23_15).json()
+    assert body["cancel_deadline_at"] == "2026-10-22T15:00:00+09:00"
+
+
+def test_other_days_are_not_blocked_by_a_busy_day(user_client):
+    holder = _hold_day_lock(D23)
+    try:
+        t = _time.perf_counter()
+        res = user_client.post("/api/reservations", json={**DAYUSE_23_15, "date": "2026-10-26"})
+        assert res.status_code == 201
+        assert _time.perf_counter() - t < 0.5
+    finally:
+        holder.rollback(); holder.close()
+
+
+def test_a_stay_spanning_a_busy_day_waits_for_it(user_client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "booking_lock_timeout_ms", 200)
+    holder = _hold_day_lock(D24)  # 10/23 15:00 → 10/25 11:00 crosses 10/24
+    try:
+        res = user_client.post("/api/reservations", json={"type": "STAY", "check_in": "2026-10-23", "nights": 2, **GUEST_INFO})
+        assert res.status_code == 503
+    finally:
+        holder.rollback(); holder.close()
+
+
+def test_day_lock_keys_cover_every_touched_kst_date_in_order():
+    from app.services import reservations as svc_mod
+    keys = svc_mod.day_lock_keys(kst(D23, 15), kst(date(2026, 10, 25), 12))
+    assert [o for _, o in keys] == sorted(o for _, o in keys) and len(keys) == 3

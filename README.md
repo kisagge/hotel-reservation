@@ -81,6 +81,17 @@ WHERE (status = 'CONFIRMED')
 
 같은 GiST 인덱스가 예약 가능 여부 조회에도 쓰여요. 그 밖의 무결성 규칙(예약 종류별 모양, 취소·환불 상태, 설정 범위)도 CHECK 제약으로 DB가 직접 지켜요. 내 예약, 어드민 목록과 검색, 대시보드도 인덱스를 써요. 예약 5만 건 기준으로 모든 주요 쿼리가 1ms 미만이에요. 자세한 내용은 [`docs/erd.md`](docs/erd.md)에 있어요.
 
+**여러 서버에서 동시에 예약할 때:** `backend/scripts/concurrency_check.py`로 확인해요. 서버 2대(각 프로세스 4개)가 DB 하나를 같이 쓰는 상태에서 사용자 200~400명이 동시에 요청을 보내요.
+- 같은 시간에 몰림, 겹치는 대실·숙박, 차단 대 예약, 동시 취소, 취소와 재예약 동시 진행, 무작위 부하를 시험해요.
+- 끝난 뒤 DB에서 겹친 확정 예약 0건, 결제·환불 일치, 5xx 0건을 확인해요.
+- 운영할 때는 uvicorn을 `--timeout-keep-alive 30` 이상으로 띄우는 걸 권장해요. 기본 5초면 요청이 몰릴 때 유휴 연결이 끊기는 경쟁 상황이 생겨요.
+
+```bash
+# DB(haru_load)를 쓰는 서버 2대를 띄운 뒤
+uv run python scripts/concurrency_check.py --bases http://localhost:8201,http://localhost:8202 \
+  --db postgresql://haru:haru@localhost:5433/haru_load --users 200
+```
+
 ### 2. 차단 일정도 같은 테이블에 있어요
 
 점검 같은 차단 일정은 `type = 'BLOCK'` 행으로 저장해요. 그래서 같은 제약이 예약과 차단 사이의 겹침도 막아줘요. 테이블을 나눴다면 두 테이블에 걸친 경쟁 조건을 따로 처리해야 했을 거예요.

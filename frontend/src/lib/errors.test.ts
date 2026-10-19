@@ -5,6 +5,7 @@ describe("errorMessage", () => {
   it("maps known API codes", () => {
     expect(errorMessage("SLOT_UNAVAILABLE")).toBe("방금 다른 예약이 들어왔어요. 다른 시간을 선택해 주세요");
     expect(errorMessage("INVALID_CREDENTIALS")).toBe("이메일 또는 비밀번호가 맞지 않아요");
+    expect(errorMessage("SERVICE_BUSY")).toBe("지금 예약 요청이 많아요. 잠시 후 다시 시도해 주세요");
   });
 
   it("falls back for unknown or non-string codes", () => {

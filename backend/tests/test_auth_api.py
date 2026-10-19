@@ -55,3 +55,16 @@ def test_concurrent_duplicate_signup_is_409_not_500(make_client):
     with ThreadPoolExecutor(4) as pool:
         codes = sorted(pool.map(lambda c: c.post("/api/auth/signup", json=GUEST).status_code, clients))
     assert codes == [201, 409, 409, 409]
+
+
+def test_password_hashing_runs_without_holding_a_db_connection(client, monkeypatch):
+    """argon2 is deliberately slow; doing it while a pooled connection is checked out starves the pool in a burst."""
+    from app.api import auth as auth_api
+    from app.core.db import engine
+    seen = []
+    real_hash, real_verify = auth_api.hash_password, auth_api.verify_password
+    monkeypatch.setattr(auth_api, "hash_password", lambda pw: (seen.append(engine.pool.checkedout()), real_hash(pw))[1])
+    monkeypatch.setattr(auth_api, "verify_password", lambda pw, h: (seen.append(engine.pool.checkedout()), real_verify(pw, h))[1])
+    assert client.post("/api/auth/signup", json=GUEST).status_code == 201
+    assert client.post("/api/auth/login", json={"email": GUEST["email"], "password": GUEST["password"]}).status_code == 200
+    assert seen == [0, 0]

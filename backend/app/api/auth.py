@@ -20,9 +20,11 @@ def _set_session(response: Response, user: User) -> None:
 @router.post("/signup", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def signup(body: SignupIn, db: DB, response: Response) -> User:
     email = body.email.lower()
+    # Hash before touching the DB: argon2 is slow on purpose and must not pin a pooled connection.
+    password_hash = hash_password(body.password)
     if db.scalar(select(User.id).where(User.email == email)):
         raise HTTPException(status.HTTP_409_CONFLICT, "EMAIL_TAKEN")
-    user = User(email=email, password_hash=hash_password(body.password), name=body.name, phone=body.phone)
+    user = User(email=email, password_hash=password_hash, name=body.name, phone=body.phone)
     db.add(user)
     try:
         db.commit()
@@ -36,7 +38,9 @@ def signup(body: SignupIn, db: DB, response: Response) -> User:
 @router.post("/login", response_model=UserOut)
 def login(body: LoginIn, db: DB, response: Response) -> User:
     user = db.scalar(select(User).where(User.email == body.email.lower()))
-    if user is None or not verify_password(body.password, user.password_hash):
+    stored_hash = user.password_hash if user else None
+    db.rollback()  # return the connection to the pool before the slow argon2 verify
+    if user is None or not verify_password(body.password, stored_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "INVALID_CREDENTIALS")
     _set_session(response, user)
     return user

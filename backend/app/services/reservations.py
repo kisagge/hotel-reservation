@@ -1,5 +1,8 @@
 """Reservation persistence and queries. Business rules live in app.domain."""
 
+import random
+import time
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import Literal
 
@@ -8,9 +11,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.clock import KST, kst, today_kst
+from app.core.config import get_settings
 from app.domain.availability import Busy, overlaps
 from app.domain.rules import Quote, RuleSettings, quote_dayuse, quote_stay
-from app.models import Payment, Reservation, Room, RoomSettings, User
+from app.models import Payment, Reservation, RoomSettings, User
 from app.schemas import QuoteIn
 from app.services.payments import PaymentProvider
 
@@ -35,6 +39,10 @@ class AlreadyCancelled(Exception):
 
 class BlockOverlaps(Exception):
     pass
+
+
+class ServiceBusy(Exception):
+    """The room's write lock stayed busy past booking_lock_timeout_ms; safe to retry."""
 
 
 # ---- reads ---------------------------------------------------------------------------------------------------
@@ -69,9 +77,9 @@ def build_quote(q: QuoteIn, rules: RuleSettings) -> Quote:
     return quote_stay(q.check_in, q.nights, rules)
 
 
-def evaluate_quote(db: Session, q: QuoteIn, now: datetime) -> tuple[Quote, str | None]:
+def evaluate_quote(db: Session, q: QuoteIn, now: datetime, rules: RuleSettings | None = None) -> tuple[Quote, str | None]:
     """Quote plus the reason it cannot be booked right now (None if bookable)."""
-    quote = build_quote(q, load_rules(db))
+    quote = build_quote(q, rules or load_rules(db))
     w = quote.window
     if w.start_at <= now:
         return quote, "IN_THE_PAST"
@@ -99,21 +107,66 @@ def is_overlap_error(e: IntegrityError) -> bool:
     return getattr(e.orig, "sqlstate", None) == OVERLAP_SQLSTATE
 
 
-def lock_room(db: Session) -> None:
-    """Serialize occupancy writes for the room until commit. Concurrent inserts racing inside the exclusion
-    check deadlock each other (40P01); taking this row lock first means the check never sees two inserters,
-    and the quote evaluated after it already sees the winner."""
-    db.execute(select(Room.id).where(Room.id == ROOM_ID).with_for_update())
+EPOCH = date(2000, 1, 1)
+
+
+def day_lock_keys(start: datetime, end: datetime) -> list[tuple[int, int]]:
+    """(room, KST-day ordinal) advisory-lock keys for every calendar day [start, end] touches, ascending.
+    Two windows that overlap always share at least one day, so they serialize on that key; windows on
+    different days never wait on each other. Fixed ascending order means two multi-day writers cannot deadlock."""
+    first, last = start.astimezone(KST).date(), end.astimezone(KST).date()
+    return [(ROOM_ID, (first - EPOCH).days + i) for i in range((last - first).days + 1)]
+
+
+def _try_lock_days(db: Session, start: datetime, end: datetime) -> bool:
+    """Take every day lock without waiting (ascending order); False means another writer holds one."""
+    for room, ordinal in day_lock_keys(start, end):
+        if not db.scalar(select(func.pg_try_advisory_xact_lock(room, ordinal))):
+            return False
+    return True
+
+
+def lock_days(db: Session, start: datetime, end: datetime, still_possible: Callable[[], None] | None = None) -> None:
+    """Serialize occupancy writes for the days a window touches, until commit.
+
+    Concurrent inserts racing inside the exclusion check would deadlock each other (40P01); taking these locks
+    first means the check never sees two inserters, and the quote re-evaluated after it already sees the winner.
+    Waiting never pins a pooled connection: when a lock is busy we roll back (returning the connection), back off
+    with jitter, and re-run `still_possible` (a lock-free check that raises once the slot is gone, so losers
+    leave with 409 as soon as the winner commits). Past booking_lock_timeout_ms → ServiceBusy (HTTP 503)."""
+    deadline = time.monotonic() + get_settings().booking_lock_timeout_ms / 1000
+    delay = 0.01
+    while True:
+        if _try_lock_days(db, start, end):
+            return
+        db.rollback()
+        if time.monotonic() >= deadline:
+            raise ServiceBusy()
+        time.sleep(min(delay, max(0.0, deadline - time.monotonic())) * random.uniform(0.5, 1.5))
+        delay = min(delay * 2, 0.2)
+        if still_possible:
+            still_possible()
 
 
 def create_reservation(db: Session, user: User, q: QuoteIn, guest_name: str, guest_phone: str, now: datetime,
                        payments: PaymentProvider) -> Reservation:
-    lock_room(db)
-    quote, reason = evaluate_quote(db, q, now)
+    rules = load_rules(db)  # one settings snapshot for price, buffer and cancel deadline
+
+    def still_possible() -> None:
+        """Lock-free check: in a burst most requests target a slot that is already gone."""
+        _, why = evaluate_quote(db, q, now, rules)
+        if why:
+            db.rollback()
+            raise SlotUnavailable(why)
+
+    still_possible()
+    quote = build_quote(q, rules)
+    lock_days(db, quote.window.start_at, quote.window.blocked_until, still_possible)
+    quote, reason = evaluate_quote(db, q, now, rules)  # authoritative re-check under the lock
     if reason:
+        db.rollback()  # release the day locks now, not when the response has been sent
         raise SlotUnavailable(reason)
     w = quote.window
-    rules = load_rules(db)
     r = Reservation(room_id=ROOM_ID, user_id=user.id, type=q.type, status="CONFIRMED", start_at=w.start_at,
                     end_at=w.end_at, blocked_until=w.blocked_until, nights=quote.nights, guest_name=guest_name,
                     guest_phone=guest_phone, total_price=quote.total,
@@ -215,7 +268,7 @@ def dashboard(db: Session, now: datetime) -> dict:
 
 def create_block(db: Session, start: datetime, end: datetime, reason: str) -> Reservation:
     """Blocks occupy exactly [start, end); the same exclusion constraint guards them against bookings."""
-    lock_room(db)
+    lock_days(db, start, end)
     r = Reservation(room_id=ROOM_ID, type="BLOCK", status="CONFIRMED", start_at=start, end_at=end,
                     blocked_until=end, block_reason=reason, total_price=0)
     db.add(r)
