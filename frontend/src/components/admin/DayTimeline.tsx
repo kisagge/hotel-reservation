@@ -32,7 +32,7 @@ export function DayTimeline({ items, day, height = 64, compact = false, segments
               {wide && (
                 <>
                   <span className={cn("font-medium", compact ? "text-caption" : "text-label")}>
-                    {s.kind === "CLEANING" || s.kind === "FREE" ? KIND_KO[s.kind] : compact ? `${KIND_KO[s.kind]} ${hhmm(s.fromHour)}` : `${KIND_KO[s.kind]}${s.label ? ` · ${s.label}` : ""}`}
+                    {s.kind === "CLEANING" || s.kind === "FREE" ? KIND_KO[s.kind] : compact ? `${KIND_KO[s.kind]} ${s.fromHour === 0 ? `~${hhmm(s.toHour)}` : hhmm(s.fromHour)}` : `${KIND_KO[s.kind]}${s.label ? ` · ${s.label}` : ""}`}
                   </span>
                   {!compact && s.kind !== "CLEANING" && (
                     <span className="text-caption opacity-80">{s.kind === "FREE" ? `${hhmm(s.fromHour)} 이후` : `${hhmm(s.fromHour)} – ${hhmm(s.toHour)}`}</span>

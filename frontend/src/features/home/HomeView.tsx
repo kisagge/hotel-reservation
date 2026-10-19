@@ -45,7 +45,7 @@ export function HomeView({ room, loggedIn }: { room: Room; loggedIn: boolean }) 
         {[0, 1].map((i) =>
           shown[i] ? (
             <div key={i} className="relative h-[84px] flex-1 overflow-hidden rounded-md">
-              <Image src={shown[i].url} alt={`객실 사진 ${i + 1}`} fill sizes="120px" unoptimized className="object-cover" />
+              <Image src={shown[i].url} alt={`객실 사진 ${i + 1}`} fill sizes="120px" unoptimized loading="eager" className="object-cover" />
             </div>
           ) : (
             <div key={i} className={`flex h-[84px] flex-1 items-center justify-center rounded-md ${PLACEHOLDER_FILLS[i]}`}>
