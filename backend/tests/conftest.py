@@ -44,3 +44,67 @@ def room(db):
     db.add(RoomSettings(id=1, room_id=1))
     db.commit()
     return r
+
+
+# ---- API clients ----------------------------------------------------------
+from datetime import date
+
+from fastapi.testclient import TestClient
+
+from app.core.clock import get_now, kst
+from app.core.security import hash_password
+from app.main import create_app
+from app.models import User
+
+DEFAULT_NOW = kst(date(2026, 10, 19), 9)
+GUEST = {"email": "guest@example.com", "password": "password123", "name": "김하루", "phone": "010-1234-5678"}
+ADMIN = {"email": "admin@haru.dev", "password": "admin1234"}
+
+
+class Clock:
+    def __init__(self):
+        self.now = DEFAULT_NOW
+
+    def set(self, dt):
+        self.now = dt
+
+
+@pytest.fixture
+def clock():
+    return Clock()
+
+
+@pytest.fixture
+def app(db, room, clock):
+    application = create_app()
+    application.dependency_overrides[get_now] = lambda: clock.now
+    return application
+
+
+@pytest.fixture
+def make_client(app):
+    def _make() -> TestClient:
+        return TestClient(app)
+    return _make
+
+
+@pytest.fixture
+def client(make_client):
+    return make_client()
+
+
+@pytest.fixture
+def user_client(make_client):
+    c = make_client()
+    assert c.post("/api/auth/signup", json=GUEST).status_code == 201
+    return c
+
+
+@pytest.fixture
+def admin_client(make_client, db):
+    db.add(User(email=ADMIN["email"], password_hash=hash_password(ADMIN["password"]), name="관리자",
+                phone="010-0000-0000", role="ADMIN"))
+    db.commit()
+    c = make_client()
+    assert c.post("/api/auth/login", json=ADMIN).status_code == 200
+    return c
