@@ -6,7 +6,7 @@ describe("safeNext (open-redirect guard)", () => {
     expect(safeNext("/checkout?type=DAYUSE&date=2026-10-23&hour=15")).toBe("/checkout?type=DAYUSE&date=2026-10-23&hour=15");
   });
 
-  it.each(["https://evil.com", "//evil.com", "/\\evil.com", "/\t/evil.com", "/\n/evil.com", "/\r//evil.com", "javascript:alert(1)", "", null])("rejects %j", (next) => {
+  it.each(["https://evil.com", "//evil.com", "/\\evil.com", "/\t/evil.com", "/\n/evil.com", "/\r//evil.com", "/.//evil.com", "/a/..//evil.com", "javascript:alert(1)", "", null])("rejects %j", (next) => {
     expect(safeNext(next)).toBe("/");
   });
 });

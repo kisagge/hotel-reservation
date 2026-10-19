@@ -9,7 +9,9 @@ export function safeNext(next: string | null | undefined): string {
   try {
     const url = new URL(next, ORIGIN);
     if (url.origin !== ORIGIN) return "/";
-    return url.pathname + url.search + url.hash;
+    // Dot segments can normalize "/.//evil.com" into "//evil.com"; check what we actually hand back.
+    const out = url.pathname + url.search + url.hash;
+    return out.startsWith("//") ? "/" : out;
   } catch {
     return "/";
   }
