@@ -1,12 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { CalendarMonth } from "./CalendarMonth";
+import { CalendarMonth, type DayState } from "./CalendarMonth";
 
-const setup = (dayState = (d: string) => (d === "2026-10-27" ? "soldout" : "default") as const) => {
+const setup = (dayState = (d: string): DayState => (d === "2026-10-27" ? "soldout" : "default")) => {
   const onSelect = vi.fn();
   render(
-    <CalendarMonth year={2026} month={10} today="2026-10-19" dayState={dayState as never} onSelect={onSelect}
+    <CalendarMonth year={2026} month={10} today="2026-10-19" dayState={dayState} onSelect={onSelect}
       onMonthChange={vi.fn()} canPrev={false} canNext />,
   );
   return { onSelect };
