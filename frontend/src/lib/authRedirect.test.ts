@@ -6,9 +6,13 @@ describe("safeNext (open-redirect guard)", () => {
     expect(safeNext("/checkout?type=DAYUSE&date=2026-10-23&hour=15")).toBe("/checkout?type=DAYUSE&date=2026-10-23&hour=15");
   });
 
-  it.each(["https://evil.com", "//evil.com", "/\\evil.com", "javascript:alert(1)", "", null])("rejects %s", (next) => {
+  it.each(["https://evil.com", "//evil.com", "/\\evil.com", "/\t/evil.com", "/\n/evil.com", "/\r//evil.com", "javascript:alert(1)", "", null])("rejects %j", (next) => {
     expect(safeNext(next)).toBe("/");
   });
+});
+
+it("re-serializes so only same-origin path, query and hash survive", () => {
+  expect(safeNext("/book?tab=stay#cal")).toBe("/book?tab=stay#cal");
 });
 
 describe("loginHref", () => {
