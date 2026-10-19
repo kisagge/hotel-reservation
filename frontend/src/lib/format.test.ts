@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDateKo, formatRange, formatShortDate, formatTime, formatWon } from "./format";
+import { formatAdminRange, formatDateKo, formatRange, formatShortDate, formatTime, formatWon } from "./format";
 
 describe("format", () => {
   it("formatWon", () => {
@@ -24,5 +24,10 @@ describe("format", () => {
 
   it("day-use ending at midnight stays a same-day range", () => {
     expect(formatRange("2026-10-23T20:00:00+09:00", "2026-10-24T00:00:00+09:00")).toBe("10월 23일 (금) 20:00 ~ 24:00");
+  });
+
+  it("formatAdminRange", () => {
+    expect(formatAdminRange("2026-10-19T12:00:00+09:00", "2026-10-19T16:00:00+09:00")).toBe("10/19 (월) 12:00 – 16:00");
+    expect(formatAdminRange("2026-10-20T15:00:00+09:00", "2026-10-21T11:00:00+09:00")).toBe("10/20 (화) 15:00 → 10/21 11:00");
   });
 });
