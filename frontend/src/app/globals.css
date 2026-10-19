@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* HARU design tokens — mirrors the Figma "Color" / "Dimension" variables and text styles. */
+@theme {
+  --color-canvas: #f5f1ea;
+  --color-surface: #ffffff;
+  --color-muted: #ede7dd;
+  --color-inverse: #1f1c19;
+  --color-ink: #1f1c19;
+  --color-ink-2: #6b645c;
+  --color-ink-3: #a39b90;
+  --color-ink-disabled: #b8b0a5;
+  --color-line: #e2dace;
+  --color-line-strong: #cfc5b6;
+  --color-pine: #2e4a3f;
+  --color-pine-hover: #233a31;
+  --color-pine-soft: #dce6e0;
+  --color-amber: #b8692a;
+  --color-amber-soft: #f6e6d3;
+  --color-danger: #b4432f;
+  --color-danger-soft: #f5deda;
+  --color-success: #3d7a55;
+  --color-success-soft: #ddeee2;
+  --color-disabled: #e7e1d8;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --text-display-l: 32px;
+  --text-display-l--line-height: 42px;
+  --text-display-l--letter-spacing: -1px;
+  --text-display-m: 24px;
+  --text-display-m--line-height: 32px;
+  --text-display-m--letter-spacing: -0.5px;
+  --text-display-s: 20px;
+  --text-display-s--line-height: 28px;
+  --text-heading-l: 20px;
+  --text-heading-l--line-height: 28px;
+  --text-heading-l--letter-spacing: -0.5px;
+  --text-heading-m: 17px;
+  --text-heading-m--line-height: 24px;
+  --text-heading-m--letter-spacing: -0.3px;
+  --text-heading-s: 15px;
+  --text-heading-s--line-height: 22px;
+  --text-heading-s--letter-spacing: -0.2px;
+  --text-body-l: 16px;
+  --text-body-l--line-height: 24px;
+  --text-body-l--letter-spacing: -0.2px;
+  --text-body-m: 14px;
+  --text-body-m--line-height: 20px;
+  --text-body-m--letter-spacing: -0.1px;
+  --text-label: 13px;
+  --text-label--line-height: 18px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-number-l: 22px;
+  --text-number-l--line-height: 28px;
+  --text-number-l--letter-spacing: -0.5px;
+  --text-number-xl: 28px;
+  --text-number-xl--line-height: 36px;
+  --text-number-xl--letter-spacing: -0.8px;
+
+  --shadow-card: 0 2px 8px rgb(31 26 20 / 0.06), 0 12px 32px -8px rgb(31 26 20 / 0.08);
+  --shadow-sheet: 0 -4px 24px rgb(31 26 20 / 0.12);
+}
+
+@theme inline {
+  --font-sans: var(--font-noto-sans-kr), system-ui, sans-serif;
+  --font-display: var(--font-gowun-batang), serif;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

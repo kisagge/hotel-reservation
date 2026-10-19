@@ -8,3 +8,7 @@ node_modules/
 .next/
 .pytest_cache/
 .DS_Store
+frontend/test-results/
+frontend/playwright-report/
+.playwright-mcp/
+frontend/next-env.d.ts

@@ -1,0 +1,22 @@
+import type { Metadata } from "next";
+import { Gowun_Batang, Noto_Sans_KR } from "next/font/google";
+import { Providers } from "./providers";
+import "./globals.css";
+
+const notoSansKr = Noto_Sans_KR({ variable: "--font-noto-sans-kr", weight: ["400", "500", "700"], subsets: ["latin"] });
+const gowunBatang = Gowun_Batang({ variable: "--font-gowun-batang", weight: ["400", "700"], subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "HARU · 하루를 쉬어가는 방",
+  description: "낮에는 대실, 밤에는 숙박. 단 하나의 방을 온전히.",
+};
+
+export default function RootLayout({ children }: LayoutProps<"/">) {
+  return (
+    <html lang="ko" className={`${notoSansKr.variable} ${gowunBatang.variable} h-full`}>
+      <body className="min-h-full">
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
+}
