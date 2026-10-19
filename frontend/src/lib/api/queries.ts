@@ -7,6 +7,7 @@ import type { components } from "./schema";
 export type User = components["schemas"]["UserOut"];
 export type Room = components["schemas"]["RoomOut"];
 export type Rules = Room["rules"];
+export type Reservation = components["schemas"]["ReservationOut"];
 
 export class ApiError extends Error {
   constructor(public status: number, public code: unknown) {
@@ -68,4 +69,19 @@ export function useLogout() {
 
 export function useRoom() {
   return useQuery({ queryKey: qk.room, queryFn: () => unwrap(api.GET("/api/room")) });
+}
+
+export function useMyReservations() {
+  return useQuery({ queryKey: qk.myReservations, queryFn: () => unwrap(api.GET("/api/reservations/me")) });
+}
+
+export function useCancelReservation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => unwrap(api.POST("/api/reservations/{reservation_id}/cancel", { params: { path: { reservation_id: id } } })),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.myReservations });
+      qc.invalidateQueries({ queryKey: qk.availability });
+    },
+  });
 }

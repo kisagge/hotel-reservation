@@ -1,3 +1,13 @@
-export default function Placeholder() {
-  return <main className="p-6 text-body-m">내 예약 (Task 7)</main>;
+import { Suspense } from "react";
+import { Splash } from "@/components/brand/Splash";
+import { MyReservationsScreen } from "@/features/reservations/MyReservationsScreen";
+
+export const metadata = { title: "내 예약 · HARU" };
+
+export default function MyReservationsPage() {
+  return (
+    <Suspense fallback={<Splash />}>
+      <MyReservationsScreen />
+    </Suspense>
+  );
 }
