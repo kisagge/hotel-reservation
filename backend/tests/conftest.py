@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 # Point the app at the test database before anything imports app.core.db.
+os.environ.setdefault("HARU_RATE_LIMIT_ENABLED", "false")  # opt in per test (see tests/test_hardening.py)
 os.environ["HARU_DATABASE_URL"] = os.environ.get(
     "HARU_TEST_DATABASE_URL", "postgresql+psycopg://haru:haru@localhost:5433/haru_test"
 )
@@ -15,7 +16,7 @@ from app.core.db import SessionLocal, engine as app_engine
 from app.models import Room, RoomSettings
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-TABLES = "users, rooms, room_photos, room_settings, reservations, payments"
+TABLES = "users, rooms, room_photos, room_settings, reservations, payments, rate_limit_hits"
 
 
 @pytest.fixture(scope="session")

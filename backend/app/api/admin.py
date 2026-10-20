@@ -123,7 +123,17 @@ def delete_block(block_id: DbId, db: DB, now: Now) -> None:
 
 # ---- room ----
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
-PHOTO_EXT = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+# Identify images by their bytes, never by the client-declared Content-Type or filename.
+SIGNATURES = ((b"\x89PNG\r\n\x1a\n", "png"), (b"\xff\xd8\xff", "jpg"))
+
+
+def sniff_image(data: bytes) -> str | None:
+    for magic, ext in SIGNATURES:
+        if data.startswith(magic):
+            return ext
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    return None
 
 
 @router.put("/room")
@@ -135,23 +145,31 @@ def update_room(body: RoomIn, db: DB) -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.post("/room/photos", response_model=PhotoOut, status_code=status.HTTP_201_CREATED)
-def upload_photo(file: UploadFile, db: DB) -> RoomPhoto:
-    ext = PHOTO_EXT.get(file.content_type or "")
-    if ext is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "UNSUPPORTED_IMAGE_TYPE")
-    data = file.file.read(MAX_PHOTO_BYTES + 1)
-    if len(data) > MAX_PHOTO_BYTES:
-        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "IMAGE_TOO_LARGE")
-    upload_dir = Path(get_settings().upload_dir)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    name = f"{uuid.uuid4().hex}.{ext}"
-    (upload_dir / name).write_bytes(data)
-    room = db.get(Room, svc.ROOM_ID)
-    photo = RoomPhoto(room_id=room.id, url=f"/uploads/{name}", sort_order=len(room.photos))
+def _commit_photo(db, room: Room, url: str) -> RoomPhoto:
+    photo = RoomPhoto(room_id=room.id, url=url, sort_order=len(room.photos))
     db.add(photo)
     db.commit()
     return photo
+
+
+@router.post("/room/photos", response_model=PhotoOut, status_code=status.HTTP_201_CREATED)
+def upload_photo(file: UploadFile, db: DB) -> RoomPhoto:
+    data = file.file.read(MAX_PHOTO_BYTES + 1)
+    if len(data) > MAX_PHOTO_BYTES:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "IMAGE_TOO_LARGE")
+    ext = sniff_image(data)
+    if ext is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "UNSUPPORTED_IMAGE_TYPE")
+    upload_dir = Path(get_settings().upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    path = upload_dir / f"{uuid.uuid4().hex}.{ext}"
+    path.write_bytes(data)
+    try:
+        return _commit_photo(db, db.get(Room, svc.ROOM_ID), f"/uploads/{path.name}")
+    except Exception:
+        path.unlink(missing_ok=True)  # never leave an orphan file behind a failed insert
+        db.rollback()
+        raise
 
 
 @router.delete("/room/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)

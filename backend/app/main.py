@@ -11,8 +11,26 @@ from app.services.reservations import ServiceBusy
 from app.core.config import get_settings
 
 
+DEFAULT_SECRET = "dev-only-secret-change-me-in-production-0123456789"
+
+
+def assert_safe_settings(s) -> None:
+    """Refuse to serve production traffic with a guessable signing key (anyone could mint an admin token)."""
+    if s.environment == "prod" and (s.jwt_secret == DEFAULT_SECRET or len(s.jwt_secret) < 32):
+        raise RuntimeError("HARU_JWT_SECRET must be set to a random value of at least 32 characters in prod")
+
+
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+}
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
+    assert_safe_settings(settings)
     app = FastAPI(title="HARU API", version="0.1.0")
     app.add_middleware(
         CORSMiddleware,
@@ -21,6 +39,16 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        for k, v in SECURITY_HEADERS.items():
+            response.headers.setdefault(k, v)
+        if request.url.path.startswith("/uploads/"):
+            # served user content: never executable, never framed
+            response.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; sandbox"
+        return response
 
     @app.exception_handler(OverflowError)
     async def date_out_of_range(_: Request, __: OverflowError) -> JSONResponse:
