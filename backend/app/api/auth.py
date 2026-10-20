@@ -11,7 +11,7 @@ from app.core.config import get_settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models import User
 from app.schemas import LoginIn, SignupIn, UserOut
-from app.services.rate_limit import client_ip, enforce
+from app.services.rate_limit import client_ip, enforce, subject_key
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 Now = Annotated[datetime, Depends(get_now)]
@@ -46,7 +46,7 @@ def signup(body: SignupIn, db: DB, response: Response, request: Request, now: No
 @router.post("/login", response_model=UserOut)
 def login(body: LoginIn, db: DB, response: Response, request: Request, now: Now) -> User:
     s = get_settings()
-    enforce(db, [(f"login:email:{body.email.lower()}", s.login_per_email_limit, s.login_per_email_window_s),
+    enforce(db, [(subject_key("login:email", body.email.lower()), s.login_per_email_limit, s.login_per_email_window_s),
                  (f"login:ip:{client_ip(request)}", s.login_per_ip_limit, s.login_per_ip_window_s)], now)
     user = db.scalar(select(User).where(User.email == body.email.lower()))
     stored_hash = user.password_hash if user else None

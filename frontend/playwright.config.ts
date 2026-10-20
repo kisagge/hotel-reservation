@@ -21,7 +21,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `bash ../scripts/e2e-db.sh && cd ../backend && HARU_DATABASE_URL=${E2E_DB} HARU_UPLOAD_DIR=uploads-e2e uv run fastapi run app/main.py --port ${API_PORT}`,
+      command: `bash ../scripts/e2e-db.sh && cd ../backend && HARU_DATABASE_URL=${E2E_DB} HARU_UPLOAD_DIR=uploads-e2e uv run fastapi run app/main.py --no-proxy-headers --port ${API_PORT}`,
       url: `http://localhost:${API_PORT}/api/health`,
       timeout: 120_000,
       reuseExistingServer: false,

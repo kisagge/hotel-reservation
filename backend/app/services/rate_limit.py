@@ -1,5 +1,6 @@
 """Postgres-backed fixed-window rate limiting (works across processes and servers without Redis)."""
 
+import hashlib
 import random
 from datetime import UTC, datetime, timedelta
 
@@ -13,13 +14,20 @@ from app.models import RateLimitHit
 
 
 def client_ip(request: Request) -> str:
-    """The connecting peer, or the first X-Forwarded-For hop when a trusted edge sets it (never by default:
-    Next's rewrite passes a client-supplied X-Forwarded-For through unchanged)."""
+    """The connecting peer, or, when HARU_TRUST_FORWARDED_FOR is on, the last X-Forwarded-For entry: the one the
+    trusted edge wrote. Earlier entries are whatever the client sent (nginx's $proxy_add_x_forwarded_for appends),
+    and Next's rewrite adds nothing. Off by default because Next passes a client-supplied header through.
+    The server must run with --no-proxy-headers, or uvicorn rewrites request.client from that same header."""
     if get_settings().trust_forwarded_for:
-        forwarded = request.headers.get("x-forwarded-for", "")
-        if forwarded.strip():
-            return forwarded.split(",")[0].strip()
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[-1].strip()
+        if forwarded:
+            return forwarded[:64]
     return request.client.host if request.client else "unknown"
+
+
+def subject_key(kind: str, value: str) -> str:
+    """Fixed-length key for user-supplied values (emails up to 254 chars), so it always fits rate_limit_hits.key."""
+    return f"{kind}:{hashlib.sha256(value.encode()).hexdigest()[:32]}"
 
 
 def hit(db: Session, key: str, limit: int, window_s: int, now: datetime) -> int | None:

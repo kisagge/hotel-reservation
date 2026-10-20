@@ -36,7 +36,7 @@ cd backend
 uv sync
 uv run alembic upgrade head
 uv run python -m app.seed                  # 데모 데이터 (여러 번 실행해도 안전)
-uv run fastapi dev app/main.py             # http://localhost:8000/docs
+uv run fastapi dev app/main.py --no-proxy-headers   # http://localhost:8000/docs
 ```
 
 프론트엔드는 백엔드가 떠 있는 상태에서 실행해요. `/api`, `/uploads` 요청은 Next가 백엔드로 프록시해요.
@@ -158,7 +158,7 @@ uv run python scripts/concurrency_check.py --bases http://localhost:8201,http://
   - 로그인: 이메일당 15분 10회, IP당 10분 100회
   - 가입: IP당 10분 30회
   - 넘으면 `429` 응답과 함께 `Retry-After`로 다시 시도할 시점을 알려줘요.
-  - Next 프록시는 손님 IP를 넘기지 않고 손님이 보낸 `X-Forwarded-For`를 그대로 통과시켜요. 그래서 이 값은 신뢰할 수 있는 앞단 서버(nginx, 호스팅 서비스)가 덮어쓰는 환경에서만 쓰고, 그때 `HARU_TRUST_FORWARDED_FOR=true`로 켜요.
+  - Next 프록시는 손님 IP를 넘기지 않고 손님이 보낸 `X-Forwarded-For`를 그대로 통과시켜요. 그래서 이 값은 신뢰할 수 있는 앞단 서버(nginx, 호스팅 서비스)가 덮어쓰는 환경에서만 쓰고, 그때 `HARU_TRUST_FORWARDED_FOR=true`로 켜요. 켜면 마지막 항목(앞단 서버가 적은 값)만 써요. uvicorn은 `--no-proxy-headers`로 띄워야 해요. 안 그러면 uvicorn이 같은 헤더로 손님 주소를 바꿔 버려요(Docker와 E2E 명령에는 이미 들어 있어요).
 - **업로드:** 업로드한 파일 형식은 파일 내용으로 판별해요(PNG, JPEG, WebP). DB 저장에 실패하면 파일도 지워요.
 
 ### 구조

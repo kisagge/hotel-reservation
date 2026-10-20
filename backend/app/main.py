@@ -16,7 +16,8 @@ DEFAULT_SECRET = "dev-only-secret-change-me-in-production-0123456789"
 
 def assert_safe_settings(s) -> None:
     """Refuse to serve production traffic with a guessable signing key (anyone could mint an admin token)."""
-    if s.environment == "prod" and (s.jwt_secret == DEFAULT_SECRET or len(s.jwt_secret) < 32):
+    # "change-me" also catches the docker-compose fallback, which is long but published in the repo.
+    if s.environment == "prod" and (s.jwt_secret == DEFAULT_SECRET or len(s.jwt_secret) < 32 or "change-me" in s.jwt_secret):
         raise RuntimeError("HARU_JWT_SECRET must be set to a random value of at least 32 characters in prod")
 
 

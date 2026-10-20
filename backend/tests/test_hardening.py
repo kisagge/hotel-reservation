@@ -17,6 +17,20 @@ def test_prod_refuses_default_or_short_jwt_secret():
     assert_safe_settings(Settings())  # dev keeps working out of the box
 
 
+def test_prod_refuses_placeholder_jwt_secret():
+    """The docker-compose fallback is long and public; it must not pass for a real secret."""
+    with pytest.raises(RuntimeError, match="HARU_JWT_SECRET"):
+        assert_safe_settings(Settings(environment="prod", jwt_secret="docker-demo-secret-change-me-0123456789abcdef"))
+
+
+def test_seed_refuses_prod(monkeypatch):
+    from app import seed
+    monkeypatch.setattr(get_settings(), "environment", "prod")
+    monkeypatch.setattr(seed, "SessionLocal", lambda: pytest.fail("seed touched the database in prod"))
+    with pytest.raises(SystemExit, match="prod"):
+        seed.main()
+
+
 def test_prod_cookies_are_secure_by_default():
     assert Settings(environment="prod", jwt_secret="x" * 48).session_cookie_secure is True
     assert Settings().session_cookie_secure is False
@@ -76,7 +90,21 @@ def test_forwarded_for_is_ignored_unless_trusted(client, limits, monkeypatch):
     assert spoofed.status_code == 429  # a client-chosen header cannot reset its own limit
     monkeypatch.setattr(get_settings(), "trust_forwarded_for", True)
     ok = client.post("/api/auth/signup", json={**GUEST, "email": "h8@example.com"}, headers={"X-Forwarded-For": "10.0.0.50"})
-    assert ok.status_code == 201  # behind a trusted edge, the first hop identifies the client
+    assert ok.status_code == 201  # behind a trusted edge, the edge's entry identifies the client
+
+
+def test_trusted_forwarded_for_uses_the_edge_entry_not_a_client_prefix(client, limits, monkeypatch):
+    """nginx's $proxy_add_x_forwarded_for appends: "<client-supplied>, <real ip>". Only the last entry is the edge's."""
+    monkeypatch.setattr(get_settings(), "trust_forwarded_for", True)
+    codes = [client.post("/api/auth/signup", json={**GUEST, "email": f"e{i}@example.com"},
+                         headers={"X-Forwarded-For": f"6.6.6.{i}, 10.0.0.7"}).status_code for i in range(3)]
+    assert codes == [201, 201, 429]
+
+
+def test_very_long_email_login_is_a_normal_401(client, limits):
+    email = "a" * 64 + "@" + ".".join(["b" * 63] * 2) + ".com"  # valid, 197 chars
+    res = client.post("/api/auth/login", json={"email": email, "password": "whatever1"})
+    assert res.status_code == 401
 
 
 def test_rate_limit_window_resets(client, limits, clock):
