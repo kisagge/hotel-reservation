@@ -1,5 +1,7 @@
 # HARU · 호텔방 대실·숙박 예약
 
+[![CI](https://github.com/kisagge/hotel-reservation/actions/workflows/ci.yml/badge.svg)](https://github.com/kisagge/hotel-reservation/actions/workflows/ci.yml)
+
 객실 하나를 낮에는 **대실**, 밤에는 **숙박**으로 파는 예약 사이트와 관리자 페이지예요. 포트폴리오/학습용 프로젝트라 결제는 모의 결제로 처리해요.
 
 - 디자인(Figma): https://www.figma.com/design/8rIYX31Lxdsoy8eHinf4ub
@@ -14,6 +16,17 @@
 <img src="docs/screenshots/admin-dashboard.png" alt="관리자 대시보드">
 
 ## 실행
+
+### Docker로 한 번에
+
+```bash
+docker compose --profile app up -d --build   # DB + FastAPI + Next.js, 데모 데이터 포함
+open http://localhost:3000                   # API 문서: http://localhost:8000/docs
+```
+
+포트가 이미 쓰이고 있으면 `HARU_WEB_PORT=3300 HARU_API_PORT=8800`처럼 바꿔서 띄울 수 있어요. 백엔드 컨테이너는 시작할 때 마이그레이션을 적용하고 데모 데이터(`HARU_SEED=true`)를 넣어요.
+
+### 개발 환경 (호스트에서 실행)
 
 필요한 도구는 [uv](https://docs.astral.sh/uv/)와 Docker예요.
 
@@ -44,6 +57,12 @@ API 스펙이 바뀌면 `npm run gen:api`로 타입(`src/lib/api/schema.d.ts`)�
 | 손님 | haru@example.com | haru1234 |
 
 ## 테스트
+
+GitHub Actions(`.github/workflows/ci.yml`)가 push와 PR마다 아래를 실행해요.
+- 백엔드 pytest
+- 프론트 lint·단위 테스트(KST와 LA 시간대 두 번)·빌드
+- Playwright E2E와 접근성 검사
+- Docker 스택 스모크 테스트
 
 ```bash
 cd backend && uv run pytest

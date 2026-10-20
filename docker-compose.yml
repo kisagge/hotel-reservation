@@ -1,3 +1,5 @@
+# `docker compose up -d`                → PostgreSQL only (local development: run backend/frontend on the host)
+# `docker compose --profile app up -d`  → whole stack: db + FastAPI + Next.js (http://localhost:3000)
 services:
   db:
     image: postgres:16
@@ -16,5 +18,35 @@ services:
       timeout: 3s
       retries: 20
 
+  backend:
+    profiles: [app]
+    build: ./backend
+    environment:
+      HARU_DATABASE_URL: postgresql+psycopg://haru:haru@db:5432/haru
+      HARU_JWT_SECRET: ${HARU_JWT_SECRET:-docker-demo-secret-change-me-0123456789abcdef}
+      HARU_CORS_ORIGINS: '["http://localhost:${HARU_WEB_PORT:-3000}"]'
+      HARU_SEED: ${HARU_SEED:-true}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+    ports:
+      - "${HARU_API_PORT:-8000}:8000" # API docs at /docs
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    profiles: [app]
+    build:
+      context: ./frontend
+      args:
+        API_ORIGIN: http://backend:8000
+    ports:
+      - "${HARU_WEB_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  uploads:

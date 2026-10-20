@@ -27,7 +27,8 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: `npx next build && npx next start -p ${WEB_PORT}`,
+      // Same artifact the Docker image runs: the standalone server plus static assets.
+      command: `npx next build && cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/ && PORT=${WEB_PORT} node .next/standalone/server.js`,
       env: { API_ORIGIN: `http://localhost:${API_PORT}` },
       url: `http://localhost:${WEB_PORT}/login`,
       timeout: 300_000,
