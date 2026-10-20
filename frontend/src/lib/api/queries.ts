@@ -87,7 +87,8 @@ export function useCancelReservation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => unwrap(api.POST("/api/reservations/{reservation_id}/cancel", { params: { path: { reservation_id: id } } })),
-    onSuccess: () => {
+    // On failure too: a 409 (deadline passed, already cancelled elsewhere) means the list on screen is stale.
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: qk.myReservations });
       qc.invalidateQueries({ queryKey: qk.availability });
     },

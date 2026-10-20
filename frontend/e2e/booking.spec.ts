@@ -21,6 +21,12 @@ test("guest books a day-use slot, sees it in KST, and cancels it", async ({ page
   await card.getByRole("button", { name: "예약 취소" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "취소하기" }).click();
   await expect(page.getByRole("article").filter({ hasText: "15:00 ~ 19:00" })).toContainText("취소됨");
+
+  await page.getByRole("button", { name: "로그아웃" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("link", { name: "로그인" })).toBeVisible();
+  await page.waitForTimeout(500); // a late 401 refetch must not bounce us to /login
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("checkout while logged out goes through login and comes back with the selection", async ({ page }) => {

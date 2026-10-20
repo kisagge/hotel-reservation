@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.clock import KST, kst, today_kst
 from app.core.config import get_settings
 from app.domain.availability import Busy, overlaps
-from app.domain.rules import Quote, RuleSettings, quote_dayuse, quote_stay
+from app.domain.rules import Quote, RuleSettings, RuleViolation, quote_dayuse, quote_stay
 from app.models import Payment, Reservation, RoomSettings, User
 from app.schemas import QuoteIn
 from app.services.payments import PaymentProvider
@@ -77,10 +77,17 @@ def build_quote(q: QuoteIn, rules: RuleSettings) -> Quote:
     return quote_stay(q.check_in, q.nights, rules)
 
 
+def booking_horizon(now: datetime) -> datetime:
+    """Bookings must start before this instant: midnight KST after the last bookable day."""
+    return kst(today_kst(now) + timedelta(days=get_settings().booking_horizon_days + 1))
+
+
 def evaluate_quote(db: Session, q: QuoteIn, now: datetime, rules: RuleSettings | None = None) -> tuple[Quote, str | None]:
-    """Quote plus the reason it cannot be booked right now (None if bookable)."""
+    """Quote plus the reason it cannot be booked right now (None if bookable). Beyond the horizon → RuleViolation."""
     quote = build_quote(q, rules or load_rules(db))
     w = quote.window
+    if w.start_at >= booking_horizon(now):
+        raise RuleViolation("DATE_OUT_OF_RANGE")
     if w.start_at <= now:
         return quote, "IN_THE_PAST"
     if overlaps(w, busy_between(db, w.start_at, w.blocked_until)):

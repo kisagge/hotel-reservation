@@ -75,3 +75,14 @@ def test_dayuse_today_at_kst_midnight(client, clock):
     res = client.get("/api/availability/dayuse", params={"date": "2026-10-19"})
     a = {s["start_hour"]: s["available"] for s in res.json()["slots"]}
     assert a[10] is True
+
+
+def test_booking_horizon_is_enforced(client):
+    """Beyond booking_horizon_days (365) nothing is bookable: quotes are 422, availability shows no open slots."""
+    far = "2027-10-21"  # today (2026-10-19) + 367 days
+    res = client.post("/api/quotes", json={"type": "DAYUSE", "date": far, "start_hour": 15})
+    assert res.status_code == 422 and res.json()["detail"] == "DATE_OUT_OF_RANGE"
+    slots = client.get("/api/availability/dayuse", params={"date": far}).json()["slots"]
+    assert not any(s["available"] for s in slots)
+    ok = client.post("/api/quotes", json={"type": "DAYUSE", "date": "2027-10-18", "start_hour": 15})
+    assert ok.status_code == 200

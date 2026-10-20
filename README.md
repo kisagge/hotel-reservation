@@ -121,6 +121,7 @@ uv run python scripts/concurrency_check.py --bases http://localhost:8201,http://
 - "오늘", 요일 요금, 영업시간 같은 규칙은 서버 시간대와 상관없이 `Asia/Seoul` 기준으로 계산해요.
 - API 응답의 시각은 `+09:00` 오프셋으로 내려가요.
 - 취소 마감 같은 정책은 예약할 때 예약 행에 같이 저장해요(`blocked_until`, `cancel_deadline_at`). 그래서 어드민이 나중에 설정을 바꿔도 이미 있는 예약에는 적용되지 않아요.
+- 예약은 오늘(KST)부터 365일 뒤까지만 받아요(`HARU_BOOKING_HORIZON_DAYS`). 그보다 먼 날짜는 달력에서 닫혀 있고, 견적과 예약 요청은 422 `DATE_OUT_OF_RANGE`를 돌려줘요.
 - 현재 시각은 `get_now()` 의존성 하나에서만 가져와요. 그래서 테스트에서 시각을 고정하거나 바꿀 수 있어요(취소 마감 경계, 자정 직후 등).
 
 ### 4. 디자인 시스템

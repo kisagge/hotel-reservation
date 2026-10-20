@@ -19,7 +19,8 @@ describe("admin reservation filters ⇄ URL", () => {
   });
 
   it("ignores garbage values", () => {
-    const f = filtersFromSearch(new URLSearchParams("type=BLOCK&status=NOPE&page=-2&id=abc&from=bad"), "2026-10-19");
+    const f = filtersFromSearch(new URLSearchParams("type=BLOCK&status=NOPE&page=-2&id=abc&from=bad&to=2026-99-99"), "2026-10-19");
+    expect(f.to).toBe("2026-10-31");
     expect(f).toMatchObject({ type: "", status: "", page: 1, id: null, from: "2026-10-01" });
   });
 });

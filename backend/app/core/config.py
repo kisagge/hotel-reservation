@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     db_pool_timeout: float = 10.0
     # Max wait for the per-room write lock; past it the request gets a retryable 503 instead of pinning a connection.
     booking_lock_timeout_ms: int = 3000
+    # How far ahead guests may book (KST days after today); later dates are 422 DATE_OUT_OF_RANGE.
+    booking_horizon_days: int = 365
     # argon2id costs 64 MB per hash; cap parallel hashes per process so a signup burst cannot exhaust RAM.
     password_hash_concurrency: int = 4
     # Auth rate limits (shared across servers via Postgres). Login per email stops credential stuffing against one

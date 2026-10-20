@@ -243,3 +243,8 @@ def test_day_lock_keys_cover_every_touched_kst_date_in_order():
     from app.services import reservations as svc_mod
     keys = svc_mod.day_lock_keys(kst(D23, 15), kst(date(2026, 10, 25), 12))
     assert [o for _, o in keys] == sorted(o for _, o in keys) and len(keys) == 3
+
+
+def test_create_beyond_horizon_is_422(user_client):
+    res = user_client.post("/api/reservations", json={**DAYUSE_23_15, "date": "2027-10-21"})
+    assert res.status_code == 422 and res.json()["detail"] == "DATE_OUT_OF_RANGE"

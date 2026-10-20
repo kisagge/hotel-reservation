@@ -83,6 +83,25 @@ describe("MyReservationsScreen", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/login?next=%2Fme%2Freservations"));
   });
 
+  it("lets the guest log out", async () => {
+    const api = fakeApi({ "GET /api/reservations/me": () => json(ITEMS), "GET /api/room": () => json(ROOM),
+      "POST /api/auth/logout": () => new Response(null, { status: 204 }) });
+    renderWithProviders(<MyReservationsScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "로그아웃" }));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+    expect(api.count("POST /api/auth/logout")).toBe(1);
+  });
+
+  it("refreshes the list when a cancel fails (e.g. the deadline passed meanwhile)", async () => {
+    const api = fakeApi({ "GET /api/reservations/me": () => json(ITEMS), "GET /api/room": () => json(ROOM),
+      "POST /api/reservations/1/cancel": () => json({ detail: "CANCEL_DEADLINE_PASSED" }, 409) });
+    renderWithProviders(<MyReservationsScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "예약 취소" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "취소하기" }));
+    expect(await screen.findByText("취소 가능 시간이 지났어요", { selector: "[role=status]" })).toBeInTheDocument();
+    await waitFor(() => expect(api.count("GET /api/reservations/me")).toBe(2));
+  });
+
   it("shows an empty state", async () => {
     fakeApi({ "GET /api/reservations/me": () => json([]), "GET /api/room": () => json(ROOM) });
     renderWithProviders(<MyReservationsScreen />);

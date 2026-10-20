@@ -11,6 +11,8 @@ export type AdminFilters = {
 };
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** A real calendar date in YYYY-MM-DD (rejects 2026-02-30, 2026-99-99). */
+const isYmd = (v: string | null): v is YMD => !!v && YMD_RE.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().startsWith(v);
 const monthStart = (today: YMD) => `${today.slice(0, 7)}-01`;
 const monthEnd = (today: YMD) => {
   const [y, m] = today.split("-").map(Number);
@@ -28,8 +30,8 @@ export function filtersFromSearch(sp: URLSearchParams, today: YMD): AdminFilters
     q: sp.get("q") ?? "",
     type: type === "DAYUSE" || type === "STAY" ? type : "",
     status: status === "CONFIRMED" || status === "CANCELLED" ? status : "",
-    from: from && YMD_RE.test(from) ? from : monthStart(today),
-    to: to && YMD_RE.test(to) ? to : monthEnd(today),
+    from: isYmd(from) ? from : monthStart(today),
+    to: isYmd(to) ? to : monthEnd(today),
     page: posInt(sp.get("page")) ?? 1,
     id: posInt(sp.get("id")),
   };

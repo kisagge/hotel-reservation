@@ -39,7 +39,7 @@ def get_room(db: DB) -> RoomOut:
 @router.get("/availability/dayuse", response_model=DayUseAvailabilityOut)
 def dayuse_availability(date: date, db: DB, now: Now) -> DayUseAvailabilityOut:
     busy = svc.busy_between(db, kst(date), kst(date + timedelta(days=2)))
-    slots = availability.dayuse_slots(date, busy, now, svc.load_rules(db))
+    slots = availability.dayuse_slots(date, busy, now, svc.load_rules(db), svc.booking_horizon(now))
     return DayUseAvailabilityOut(date=date, slots=[s.__dict__ for s in slots])
 
 
@@ -51,7 +51,7 @@ def stay_availability(db: DB, now: Now,
     rules = svc.load_rules(db)
     busy = svc.busy_between(db, kst(date(year, mon, 1)),
                             kst(date(year, mon, last) + timedelta(days=2 + rules.stay_max_nights)))
-    days = availability.stay_days(year, mon, busy, now, rules)
+    days = availability.stay_days(year, mon, busy, now, rules, svc.booking_horizon(now))
     return StayAvailabilityOut(month=month, days=[d.__dict__ for d in days])
 
 
