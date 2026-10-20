@@ -142,6 +142,16 @@ class Reservation(Base):
     payment: Mapped["Payment | None"] = relationship(back_populates="reservation", uselist=False)
 
 
+class RateLimitHit(Base):
+    """Fixed-window counters for auth rate limits, shared by every API process and server."""
+
+    __tablename__ = "rate_limit_hits"
+
+    key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    window_start: Mapped[datetime] = _ts(primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
 class Payment(Base):
     __tablename__ = "payments"
     __table_args__ = (

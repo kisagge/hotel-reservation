@@ -2,10 +2,11 @@
 
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ReservationDetail } from "@/components/admin/ReservationDetail";
 import { ReservationTable } from "@/components/admin/ReservationTable";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { PAGE_SIZE, useAdminReservations } from "@/lib/api/adminQueries";
 import { todayKst } from "@/lib/time";
@@ -19,9 +20,13 @@ export function ReservationsScreen() {
   const router = useRouter();
   const pathname = usePathname();
   const f = filtersFromSearch(new URLSearchParams(sp.toString()), todayKst());
+  // The search debounce fires after later renders; read the newest URL filters, not the ones it closed over.
+  const latest = useRef(f);
+  useEffect(() => { latest.current = f; });
   const set = (patch: Partial<AdminFilters>) =>
-    router.replace(`${pathname}?${filtersToSearch({ ...f, page: 1, ...patch })}`, { scroll: false });
-  const list = useAdminReservations(f);
+    router.replace(`${pathname}?${filtersToSearch({ ...latest.current, page: 1, ...patch })}`, { scroll: false });
+  const badRange = f.from > f.to;
+  const list = useAdminReservations(f, !badRange);
   const [q, setQ] = useState(f.q);
 
   useEffect(() => {
@@ -67,8 +72,17 @@ export function ReservationsScreen() {
             <h2 className="text-heading-s font-bold">총 {total}건</h2>
             <span className="text-label font-medium text-ink-2">이용일 빠른 순</span>
           </div>
-          <ReservationTable items={list.data?.items ?? []} selectedId={f.id} empty="조건에 맞는 예약이 없어요"
-            onRowClick={(r) => router.replace(`${pathname}?${filtersToSearch({ ...f, id: r.id })}`, { scroll: false })} />
+          {badRange ? (
+            <p role="alert" className="rounded-md bg-danger-soft px-4 py-3 text-body-m text-danger">시작일이 종료일보다 늦어요. 기간을 다시 선택해 주세요.</p>
+          ) : list.isError ? (
+            <div role="alert" className="flex items-center justify-between gap-3 rounded-md bg-danger-soft px-4 py-3 text-body-m text-danger">
+              예약 목록을 불러오지 못했어요
+              <Button size="m" variant="secondary" onClick={() => list.refetch()}>다시 시도</Button>
+            </div>
+          ) : (
+            <ReservationTable items={list.data?.items ?? []} selectedId={f.id} empty="조건에 맞는 예약이 없어요"
+              onRowClick={(r) => router.replace(`${pathname}?${filtersToSearch({ ...f, id: r.id })}`, { scroll: false })} />
+          )}
           <div className="flex-1" />
           {pages > 1 && (
             <nav aria-label="페이지" className="flex items-center justify-center gap-1">

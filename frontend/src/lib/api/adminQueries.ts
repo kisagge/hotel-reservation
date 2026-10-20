@@ -30,13 +30,14 @@ export function useBlocks() {
 
 export const PAGE_SIZE = 20;
 
-export function useAdminReservations(f: AdminFilters) {
+export function useAdminReservations(f: AdminFilters, enabled = true) {
   const query = {
     date_from: f.from, date_to: f.to, page: f.page, size: PAGE_SIZE,
     ...(f.type && { type: f.type }), ...(f.status && { status: f.status }), ...(f.q && { q: f.q }),
   };
   return useQuery({
     queryKey: adminKeys.reservations(JSON.stringify(query)),
+    enabled,
     placeholderData: keepPreviousData,
     queryFn: () => unwrap(api.GET("/api/admin/reservations", { params: { query } })),
   });

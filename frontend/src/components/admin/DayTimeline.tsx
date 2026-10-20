@@ -12,6 +12,8 @@ const STYLE: Record<Segment["kind"], string> = {
 };
 const KIND_KO: Record<Segment["kind"], string> = { STAY: "숙박", DAYUSE: "대실", BLOCK: "차단", CLEANING: "청소", FREE: "예약 가능" };
 
+const describe = (s: Segment) => `${KIND_KO[s.kind]} ${hhmm(s.fromHour)}–${hhmm(s.toHour)}${s.label ? ` · ${s.label}` : ""}`;
+
 export const TIMELINE_LEGEND: [string, string][] = [["bg-pine", "숙박"], ["bg-amber", "대실"], ["bg-muted", "청소"], ["bg-canvas", "예약 가능"]];
 
 /** 24h occupancy bar (A1 "오늘의 객실 타임라인", also reused by the A3 rule preview). */
@@ -21,12 +23,16 @@ export function DayTimeline({ items, day, height = 64, compact = false, segments
   const segs = segments ?? timelineSegments(items ?? [], day!);
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative w-full overflow-hidden rounded-md border border-line bg-canvas" style={{ height }}>
+      {/* The bar clips narrow segments, so screen readers get every segment as a list instead. */}
+      <ul aria-label="시간대별 객실 상태" className="sr-only">
+        {segs.map((s, i) => <li key={i}>{describe(s)}</li>)}
+      </ul>
+      <div aria-hidden className="relative w-full overflow-hidden rounded-md border border-line bg-canvas" style={{ height }}>
         {segs.map((s, i) => {
           const width = s.toHour - s.fromHour;
           const wide = width >= (compact ? 2.5 : 1.5);
           return (
-            <div key={i} title={`${KIND_KO[s.kind]} ${hhmm(s.fromHour)}–${hhmm(s.toHour)}${s.label ? ` · ${s.label}` : ""}`}
+            <div key={i} title={describe(s)}
               className={cn("absolute inset-y-0 flex flex-col justify-center overflow-hidden whitespace-nowrap px-3", STYLE[s.kind], compact && "items-center px-1")}
               style={{ left: `${(s.fromHour / 24) * 100}%`, width: `${(width / 24) * 100}%` }}>
               {wide && (
@@ -43,7 +49,7 @@ export function DayTimeline({ items, day, height = 64, compact = false, segments
           );
         })}
       </div>
-      <div className="flex justify-between text-caption text-ink-3">
+      <div aria-hidden className="flex justify-between text-caption text-ink-3">
         {(compact ? [0, 6, 12, 18, 24] : [0, 3, 6, 9, 12, 15, 18, 21, 24]).map((h) => <span key={h}>{String(h).padStart(2, "0")}{compact ? "" : ":00"}</span>)}
       </div>
     </div>

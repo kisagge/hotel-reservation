@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.clock import KST, get_now, kst, today_kst
+from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.security import hash_password
 from app.domain.rules import Quote, quote_dayuse, quote_stay
@@ -75,6 +76,8 @@ def seed_reservations(db: Session, demo: User) -> None:
 
 
 def main() -> None:
+    if get_settings().environment == "prod":  # demo accounts (admin@haru.dev / admin1234) must never reach prod
+        raise SystemExit("refusing to seed demo data in prod (unset HARU_SEED)")
     with SessionLocal() as db:
         ensure_user(db, *ADMIN, role="ADMIN")
         demo = ensure_user(db, *DEMO, role="USER")

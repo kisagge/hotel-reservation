@@ -8,7 +8,8 @@ PostgreSQL database, then verifies invariants directly in the database:
   * every HTTP 201 corresponds to a stored reservation
   * no 5xx responses
 
-Usage (servers must point at a disposable database):
+Usage (servers must point at a disposable database, with HARU_RATE_LIMIT_ENABLED=false so the hundreds of
+signups/logins from one machine are not throttled by the auth rate limits):
   uv run python scripts/concurrency_check.py --bases http://localhost:8201,http://localhost:8202 \
       --db postgresql://haru:haru@localhost:5433/haru_load --users 40
 """

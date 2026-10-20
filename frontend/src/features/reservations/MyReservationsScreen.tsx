@@ -1,5 +1,6 @@
 "use client";
 
+import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
@@ -8,7 +9,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { useToast } from "@/components/ui/Toast";
 import { ScreenError } from "@/components/ui/ScreenError";
-import { ApiError, isUnauthorized, useCancelReservation, useMyReservations, type Reservation } from "@/lib/api/queries";
+import { ApiError, isUnauthorized, useCancelReservation, useLogout, useMyReservations, type Reservation } from "@/lib/api/queries";
 import { loginHref } from "@/lib/authRedirect";
 import { errorMessage } from "@/lib/errors";
 import { formatRange } from "@/lib/format";
@@ -18,6 +19,7 @@ import { ReservationCard } from "./ReservationCard";
 export function MyReservationsScreen() {
   const list = useMyReservations();
   const cancel = useCancelReservation();
+  const logout = useLogout();
   const toast = useToast();
   const router = useRouter();
   const pathname = usePathname();
@@ -32,7 +34,8 @@ export function MyReservationsScreen() {
     router.replace(pathname, { scroll: false });
   }, [created, pathname, router, toast]);
 
-  const signedOut = isUnauthorized(list.error);
+  // After an explicit logout the list refetch also 401s; that must not bounce the guest to the login page.
+  const signedOut = isUnauthorized(list.error) && !logout.isSuccess;
   useEffect(() => {
     if (signedOut) router.replace(loginHref(pathname));
   }, [signedOut, pathname, router]);
@@ -53,7 +56,13 @@ export function MyReservationsScreen() {
 
   return (
     <main id="main" tabIndex={-1} className="flex flex-1 flex-col">
-      <MobileHeader title="내 예약" back="/" />
+      <MobileHeader title="내 예약" back="/" action={
+        <button type="button" aria-label="로그아웃" disabled={logout.isPending}
+          onClick={() => logout.mutate(undefined, { onSuccess: () => router.replace("/"), onError: () => toast(errorMessage(null), "danger") })}
+          className="flex size-11 items-center justify-center rounded-md text-ink-2">
+          <LogOut className="size-5" strokeWidth={1.75} aria-hidden />
+        </button>
+      } />
       {list.data.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 pb-24 text-center">
           <p className="text-heading-m font-bold">아직 예약이 없어요</p>

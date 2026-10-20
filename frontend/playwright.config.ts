@@ -17,17 +17,18 @@ export default defineConfig({
   use: { baseURL: `http://localhost:${WEB_PORT}`, locale: "ko-KR", trace: "retain-on-failure" },
   projects: [
     { name: "mobile", testMatch: /booking\.spec\.ts/, use: { browserName: "chromium", viewport: { width: 390, height: 844 }, timezoneId: "America/Los_Angeles" } },
-    { name: "desktop", testMatch: /(admin|screenshots|a11y)\.spec\.ts/, use: { browserName: "chromium", viewport: { width: 1440, height: 1024 }, timezoneId: "Asia/Seoul" } },
+    { name: "desktop", testMatch: /(admin|screenshots|a11y|security)\.spec\.ts/, use: { browserName: "chromium", viewport: { width: 1440, height: 1024 }, timezoneId: "Asia/Seoul" } },
   ],
   webServer: [
     {
-      command: `bash ../scripts/e2e-db.sh && cd ../backend && HARU_DATABASE_URL=${E2E_DB} HARU_UPLOAD_DIR=uploads-e2e uv run fastapi run app/main.py --port ${API_PORT}`,
+      command: `bash ../scripts/e2e-db.sh && cd ../backend && HARU_DATABASE_URL=${E2E_DB} HARU_UPLOAD_DIR=uploads-e2e uv run fastapi run app/main.py --no-proxy-headers --port ${API_PORT}`,
       url: `http://localhost:${API_PORT}/api/health`,
       timeout: 120_000,
       reuseExistingServer: false,
     },
     {
-      command: `npx next build && npx next start -p ${WEB_PORT}`,
+      // Same artifact the Docker image runs: the standalone server plus static assets.
+      command: `npx next build && cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/ && PORT=${WEB_PORT} node .next/standalone/server.js`,
       env: { API_ORIGIN: `http://localhost:${API_PORT}` },
       url: `http://localhost:${WEB_PORT}/login`,
       timeout: 300_000,

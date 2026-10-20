@@ -3,6 +3,13 @@ import { Button } from "@/components/ui/Button";
 import { errorMessage } from "@/lib/errors";
 import type { Quote } from "./useAvailability";
 
+/** Why the current selection cannot be booked. The calendar already hides taken slots, so SLOT_UNAVAILABLE here
+ *  usually means a multi-night range crosses a taken day — not the checkout race the generic message describes. */
+function unavailableMessage(quote: Quote): string {
+  if (quote.reason !== "SLOT_UNAVAILABLE") return errorMessage(quote.reason);
+  return quote.type === "STAY" ? "선택한 기간에 예약할 수 없는 날이 있어요" : "이미 예약된 시간이에요";
+}
+
 /** Bottom "Summary Sheet" of G2/G3. */
 export function BookingSummary({ caption, title, quote, loading, href, hint }: {
   caption?: string; title?: string; quote?: Quote; loading: boolean; href: string | null; hint: string;
@@ -24,7 +31,7 @@ export function BookingSummary({ caption, title, quote, loading, href, hint }: {
       ) : (
         <p className="text-body-m text-ink-2">{hint}</p>
       )}
-      {blocked && <p role="alert" className="-mt-2 text-body-m text-danger">{errorMessage(quote.reason)}</p>}
+      {blocked && <p role="alert" className="-mt-2 text-body-m text-danger">{unavailableMessage(quote)}</p>}
       {href && quote?.available ? (
         <Link href={href} className="flex h-[52px] items-center justify-center rounded-md bg-pine text-heading-s font-bold text-white hover:bg-pine-hover">
           예약 계속하기

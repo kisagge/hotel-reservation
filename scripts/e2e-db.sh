@@ -11,5 +11,5 @@ if ! psql -d haru -tAc "SELECT 1 FROM pg_database WHERE datname='${E2E_DB}'" | g
   docker compose exec -T db createdb -U haru "${E2E_DB}"
 fi
 (cd backend && uv run alembic upgrade head >/dev/null)
-psql -d "${E2E_DB}" -qc "TRUNCATE users, rooms, room_photos, room_settings, reservations, payments RESTART IDENTITY CASCADE"
+psql -d "${E2E_DB}" -qc "TRUNCATE users, rooms, room_photos, room_settings, reservations, payments, rate_limit_hits RESTART IDENTITY CASCADE"
 (cd backend && uv run python -m app.seed)

@@ -1,24 +1,32 @@
-from fastapi import APIRouter, HTTPException, Response, status
+from datetime import datetime
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUser
+from app.core.clock import get_now
 from app.core.config import get_settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models import User
 from app.schemas import LoginIn, SignupIn, UserOut
+from app.services.rate_limit import client_ip, enforce, subject_key
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+Now = Annotated[datetime, Depends(get_now)]
 
 
 def _set_session(response: Response, user: User) -> None:
     s = get_settings()
     response.set_cookie(s.cookie_name, create_access_token(user.id, user.role), max_age=s.jwt_expire_minutes * 60,
-                        httponly=True, samesite="lax", path="/")
+                        httponly=True, samesite="lax", path="/", secure=s.session_cookie_secure)
 
 
 @router.post("/signup", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def signup(body: SignupIn, db: DB, response: Response) -> User:
+def signup(body: SignupIn, db: DB, response: Response, request: Request, now: Now) -> User:
+    s = get_settings()
+    enforce(db, [(f"signup:ip:{client_ip(request)}", s.signup_per_ip_limit, s.signup_per_ip_window_s)], now)
     email = body.email.lower()
     # Hash before touching the DB: argon2 is slow on purpose and must not pin a pooled connection.
     password_hash = hash_password(body.password)
@@ -36,7 +44,10 @@ def signup(body: SignupIn, db: DB, response: Response) -> User:
 
 
 @router.post("/login", response_model=UserOut)
-def login(body: LoginIn, db: DB, response: Response) -> User:
+def login(body: LoginIn, db: DB, response: Response, request: Request, now: Now) -> User:
+    s = get_settings()
+    enforce(db, [(subject_key("login:email", body.email.lower()), s.login_per_email_limit, s.login_per_email_window_s),
+                 (f"login:ip:{client_ip(request)}", s.login_per_ip_limit, s.login_per_ip_window_s)], now)
     user = db.scalar(select(User).where(User.email == body.email.lower()))
     stored_hash = user.password_hash if user else None
     db.rollback()  # return the connection to the pool before the slow argon2 verify

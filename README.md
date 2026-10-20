@@ -1,5 +1,7 @@
 # HARU · 호텔방 대실·숙박 예약
 
+[![CI](https://github.com/kisagge/hotel-reservation/actions/workflows/ci.yml/badge.svg)](https://github.com/kisagge/hotel-reservation/actions/workflows/ci.yml)
+
 객실 하나를 낮에는 **대실**, 밤에는 **숙박**으로 파는 예약 사이트와 관리자 페이지예요. 포트폴리오/학습용 프로젝트라 결제는 모의 결제로 처리해요.
 
 - 디자인(Figma): https://www.figma.com/design/8rIYX31Lxdsoy8eHinf4ub
@@ -15,6 +17,17 @@
 
 ## 실행
 
+### Docker로 한 번에
+
+```bash
+docker compose --profile app up -d --build   # DB + FastAPI + Next.js, 데모 데이터 포함
+open http://localhost:3000                   # API 문서: http://localhost:8000/docs
+```
+
+포트가 이미 쓰이고 있으면 `HARU_WEB_PORT=3300 HARU_API_PORT=8800`처럼 바꿔서 띄울 수 있어요. 백엔드 컨테이너는 시작할 때 마이그레이션을 적용하고 데모 데이터(`HARU_SEED=true`)를 넣어요.
+
+### 개발 환경 (호스트에서 실행)
+
 필요한 도구는 [uv](https://docs.astral.sh/uv/)와 Docker예요.
 
 ```bash
@@ -23,7 +36,7 @@ cd backend
 uv sync
 uv run alembic upgrade head
 uv run python -m app.seed                  # 데모 데이터 (여러 번 실행해도 안전)
-uv run fastapi dev app/main.py             # http://localhost:8000/docs
+uv run fastapi dev app/main.py --no-proxy-headers   # http://localhost:8000/docs
 ```
 
 프론트엔드는 백엔드가 떠 있는 상태에서 실행해요. `/api`, `/uploads` 요청은 Next가 백엔드로 프록시해요.
@@ -44,6 +57,12 @@ API 스펙이 바뀌면 `npm run gen:api`로 타입(`src/lib/api/schema.d.ts`)�
 | 손님 | haru@example.com | haru1234 |
 
 ## 테스트
+
+GitHub Actions(`.github/workflows/ci.yml`)가 push와 PR마다 아래를 실행해요.
+- 백엔드 pytest
+- 프론트 lint·단위 테스트(KST와 LA 시간대 두 번)·빌드
+- Playwright E2E와 접근성 검사
+- Docker 스택 스모크 테스트
 
 ```bash
 cd backend && uv run pytest
@@ -102,6 +121,7 @@ uv run python scripts/concurrency_check.py --bases http://localhost:8201,http://
 - "오늘", 요일 요금, 영업시간 같은 규칙은 서버 시간대와 상관없이 `Asia/Seoul` 기준으로 계산해요.
 - API 응답의 시각은 `+09:00` 오프셋으로 내려가요.
 - 취소 마감 같은 정책은 예약할 때 예약 행에 같이 저장해요(`blocked_until`, `cancel_deadline_at`). 그래서 어드민이 나중에 설정을 바꿔도 이미 있는 예약에는 적용되지 않아요.
+- 예약은 오늘(KST)부터 365일 뒤까지만 받아요(`HARU_BOOKING_HORIZON_DAYS`). 그보다 먼 날짜는 달력에서 닫혀 있고, 견적과 예약 요청은 422 `DATE_OUT_OF_RANGE`를 돌려줘요.
 - 현재 시각은 `get_now()` 의존성 하나에서만 가져와요. 그래서 테스트에서 시각을 고정하거나 바꿀 수 있어요(취소 마감 경계, 자정 직후 등).
 
 ### 4. 디자인 시스템
@@ -124,6 +144,22 @@ uv run python scripts/concurrency_check.py --bases http://localhost:8201,http://
   - 대실/숙박 전환은 `aria-pressed` 토글이에요.
   - 상태 메시지는 `aria-live`로 읽혀요.
 - **레이아웃:** 손님 화면은 320px 폭에서도 가로 스크롤 없이 보여요. 400% 확대에 해당해요.
+
+### 6. 보안
+
+- **운영 모드(`HARU_ENVIRONMENT=prod`):**
+  - 기본 JWT 비밀키나 32자 미만 키로는 서버가 시작되지 않아요.
+  - 세션 쿠키는 `HttpOnly`, `SameSite=Lax`이고 운영 모드에서는 `Secure`가 붙어요.
+- **보안 헤더:**
+  - 화면은 CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`가 붙어요.
+  - API는 `nosniff`, `X-Frame-Options`가 붙어요.
+  - 업로드 파일은 `sandbox` CSP와 함께 내려가요.
+- **로그인·가입 요청 횟수 제한:** Postgres에 카운터를 둬서 서버가 여러 대여도 같은 한도를 써요. 느린 비밀번호 해시 계산보다 먼저 확인해요.
+  - 로그인: 이메일당 15분 10회, IP당 10분 100회
+  - 가입: IP당 10분 30회
+  - 넘으면 `429` 응답과 함께 `Retry-After`로 다시 시도할 시점을 알려줘요.
+  - Next 프록시는 손님 IP를 넘기지 않고 손님이 보낸 `X-Forwarded-For`를 그대로 통과시켜요. 그래서 이 값은 신뢰할 수 있는 앞단 서버(nginx, 호스팅 서비스)가 덮어쓰는 환경에서만 쓰고, 그때 `HARU_TRUST_FORWARDED_FOR=true`로 켜요. 켜면 마지막 항목(앞단 서버가 적은 값)만 써요. uvicorn은 `--no-proxy-headers`로 띄워야 해요. 안 그러면 uvicorn이 같은 헤더로 손님 주소를 바꿔 버려요(Docker와 E2E 명령에는 이미 들어 있어요).
+- **업로드:** 업로드한 파일 형식은 파일 내용으로 판별해요(PNG, JPEG, WebP). DB 저장에 실패하면 파일도 지워요.
 
 ### 구조
 
