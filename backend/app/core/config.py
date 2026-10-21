@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     login_per_email_window_s: int = 900
     login_per_ip_limit: int = 100
     login_per_ip_window_s: int = 600
+    # Device cookies (OWASP): a browser that has signed in to an account before gets its own attempt budget for
+    # that account, so lockouts aimed at the account (per email) or at everyone (per IP) do not lock its owner out.
+    device_cookie_name: str = "haru_device"
+    device_cookie_days: int = 180
+    login_per_device_limit: int = 10
+    login_per_device_window_s: int = 900
     signup_per_ip_limit: int = 30
     signup_per_ip_window_s: int = 600
 

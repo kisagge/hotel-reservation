@@ -8,7 +8,13 @@ from sqlalchemy.exc import IntegrityError
 from app.api.deps import DB, CurrentUser
 from app.core.clock import get_now
 from app.core.config import get_settings
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    create_device_token,
+    device_id_for,
+    hash_password,
+    verify_password,
+)
 from app.models import User
 from app.schemas import LoginIn, SignupIn, UserOut
 from app.services.rate_limit import client_ip, enforce, subject_key
@@ -21,6 +27,9 @@ def _set_session(response: Response, user: User) -> None:
     s = get_settings()
     response.set_cookie(s.cookie_name, create_access_token(user.id, user.role), max_age=s.jwt_expire_minutes * 60,
                         httponly=True, samesite="lax", path="/", secure=s.session_cookie_secure)
+    # Survives logout on purpose; only sent to the auth endpoints.
+    response.set_cookie(s.device_cookie_name, create_device_token(user.email), max_age=s.device_cookie_days * 86400,
+                        httponly=True, samesite="strict", path="/api/auth", secure=s.session_cookie_secure)
 
 
 @router.post("/signup", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -46,8 +55,13 @@ def signup(body: SignupIn, db: DB, response: Response, request: Request, now: No
 @router.post("/login", response_model=UserOut)
 def login(body: LoginIn, db: DB, response: Response, request: Request, now: Now) -> User:
     s = get_settings()
-    enforce(db, [(subject_key("login:email", body.email.lower()), s.login_per_email_limit, s.login_per_email_window_s),
-                 (f"login:ip:{client_ip(request)}", s.login_per_ip_limit, s.login_per_ip_window_s)], now)
+    device = device_id_for(request.cookies.get(s.device_cookie_name), body.email)
+    if device:  # this browser signed in to this account before: its own budget, untouched by lockouts aimed at others
+        checks = [(f"login:device:{device}", s.login_per_device_limit, s.login_per_device_window_s)]
+    else:
+        checks = [(subject_key("login:email", body.email.lower()), s.login_per_email_limit, s.login_per_email_window_s),
+                  (f"login:ip:{client_ip(request)}", s.login_per_ip_limit, s.login_per_ip_window_s)]
+    enforce(db, checks, now)
     user = db.scalar(select(User).where(User.email == body.email.lower()))
     stored_hash = user.password_hash if user else None
     db.rollback()  # return the connection to the pool before the slow argon2 verify
