@@ -16,6 +16,7 @@ export const adminKeys = {
   blocks: ["admin", "blocks"] as const,
   reservations: (search: string) => ["admin", "reservations", search] as const,
   reservation: (id: number) => ["admin", "reservation", id] as const,
+  occupancy: (from: string, to: string) => ["admin", "occupancy", from, to] as const,
   settings: ["admin", "settings"] as const,
 };
 
@@ -27,6 +28,14 @@ export function useBlocks() {
   return useQuery({ queryKey: adminKeys.blocks, queryFn: () => unwrap(api.GET("/api/admin/blocks")) });
 }
 
+
+export function useOccupancy(from: string, to: string) {
+  return useQuery({
+    queryKey: adminKeys.occupancy(from, to),
+    placeholderData: keepPreviousData,
+    queryFn: () => unwrap(api.GET("/api/admin/occupancy", { params: { query: { date_from: from, date_to: to } } })),
+  });
+}
 
 export const PAGE_SIZE = 20;
 

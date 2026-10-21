@@ -15,6 +15,8 @@
 
 <img src="docs/screenshots/admin-dashboard.png" alt="관리자 대시보드">
 
+<img src="docs/screenshots/admin-calendar.png" alt="관리자 예약 캘린더">
+
 ## 실행
 
 ### Docker로 한 번에
@@ -185,6 +187,7 @@ frontend/src/
 | POST | `/api/reservations`, GET `/me`, POST `/{id}/cancel` | 예약(모의 결제) · 내 예약 · 취소 |
 | GET | `/api/admin/dashboard` | KPI, 오늘의 타임라인, 다가오는 예약 |
 | GET/POST | `/api/admin/reservations…` | 목록·필터·상세·취소 |
+| GET | `/api/admin/occupancy?date_from&date_to` | 기간의 점유(예약·차단, 최대 62일), 예약 캘린더용 |
 | GET/PUT | `/api/admin/settings` | 요금, 운영 시간, 청소 시간, 취소 마감 |
 | GET/POST/DELETE | `/api/admin/blocks` | 차단 일정 |
 | PUT / POST / DELETE | `/api/admin/room`, `/room/photos` | 객실 정보, 사진 |

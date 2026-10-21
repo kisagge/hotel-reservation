@@ -53,3 +53,10 @@ export function kstParts(iso: string): { ymd: YMD; hour: number; minute: number 
 export function kstIso(d: YMD, hour = 0, minute = 0): string {
   return `${d}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+09:00`;
 }
+
+/** "YYYY-MM" moved by whole months. */
+export function shiftMonth(month: string, delta: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const i = y * 12 + (m - 1) + delta;
+  return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`;
+}

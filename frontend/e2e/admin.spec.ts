@@ -19,6 +19,14 @@ test("a block added in settings closes those stay days for guests", async ({ pag
   await page.getByRole("button", { name: "추가하기" }).click();
   await expect(page.locator("#blocks")).toContainText("E2E 점검");
 
+  await page.goto("/admin/reservations");
+  await page.getByRole("button", { name: "캘린더" }).click();
+  if (monthParam(from) !== monthParam(day(0))) await page.getByRole("button", { name: "다음 달" }).click();
+  const cell = page.getByRole("table").getByRole("button", { name: new RegExp(`^${Number(from.slice(8))}, `) });
+  await expect(cell).toHaveAccessibleName(/차단 1건/);
+  await cell.click();
+  await expect(page.getByRole("list", { name: "이날 일정" })).toContainText("차단 · E2E 점검");
+
   await page.goto(`/book?tab=stay&m=${monthParam(from)}`);
   await expect(dayCell(page, from)).toHaveAccessibleName(/예약 마감/);
 });

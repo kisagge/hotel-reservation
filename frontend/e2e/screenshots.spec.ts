@@ -23,4 +23,8 @@ test("capture README screenshots", async ({ page }) => {
   await page.getByText("오늘의 객실 타임라인").waitFor();
   await page.waitForTimeout(500);
   await page.screenshot({ path: out("admin-dashboard") });
+  await page.goto(`/admin/reservations?view=calendar&day=${day(4)}`);
+  await page.getByRole("list", { name: "이날 일정" }).waitFor();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: out("admin-calendar") });
 });

@@ -86,3 +86,24 @@ def test_search_treats_wildcards_literally(admin_client, db):
     seed_mixed(db)
     assert admin_client.get("/api/admin/reservations", params={"q": "%"}).json()["total"] == 0
     assert admin_client.get("/api/admin/reservations", params={"q": "_"}).json()["total"] == 0
+
+
+def test_occupancy_lists_confirmed_rows_and_blocks_overlapping_the_range(admin_client, db):
+    seed_mixed(db)
+    book(db, kst(D(22), 10), kst(D(22), 14), kst(D(22), 15), status="CANCELLED", guest_name="취소됨")
+    book(db, kst(D(31), 15), kst(date(2026, 11, 1), 11), kst(date(2026, 11, 1), 12), type="STAY", nights=1,
+         guest_name="월말")
+    res = admin_client.get("/api/admin/occupancy", params={"date_from": "2026-10-23", "date_to": "2026-10-31"})
+    assert res.status_code == 200
+    assert [(i["type"], i["guest_name"] or i["block_reason"]) for i in res.json()] == [
+        ("DAYUSE", "이서연"), ("STAY", "박준호"), ("BLOCK", "정기 점검"), ("STAY", "월말")]
+    nov = admin_client.get("/api/admin/occupancy", params={"date_from": "2026-11-01", "date_to": "2026-11-30"}).json()
+    assert [i["guest_name"] for i in nov] == ["월말"]  # a stay that checks out on the 1st shows in both months
+
+
+def test_occupancy_rejects_bad_ranges(admin_client, user_client):
+    bad = [{"date_from": "2026-10-31", "date_to": "2026-10-01"}, {"date_from": "2026-01-01", "date_to": "2026-12-31"}]
+    for params in bad:
+        res = admin_client.get("/api/admin/occupancy", params=params)
+        assert res.status_code == 422 and res.json()["detail"] == "INVALID_RANGE"
+    assert user_client.get("/api/admin/occupancy", params={"date_from": "2026-10-01", "date_to": "2026-10-31"}).status_code == 403

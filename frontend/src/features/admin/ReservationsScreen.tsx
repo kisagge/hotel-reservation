@@ -10,12 +10,35 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { PAGE_SIZE, useAdminReservations } from "@/lib/api/adminQueries";
 import { todayKst } from "@/lib/time";
+import { CalendarView } from "./CalendarView";
 import { filtersFromSearch, filtersToSearch, type AdminFilters } from "./filters";
 
 const chip = "h-11 rounded-md border border-field bg-surface px-3.5 text-body-m font-medium outline-none focus:border-pine";
 
-/** A2 · 예약 관리 (Figma 11:52). Filters and the selected row live in the URL. */
+const toggle = (on: boolean) => cn("flex h-9 items-center rounded-sm px-6", on ? "bg-surface text-heading-s font-bold shadow-card" : "text-body-m font-medium text-ink-2 hover:text-ink");
+
+/** A2 · 예약 관리 (Figma 11:52): list or calendar view. Filters, view and the selected row live in the URL. */
 export function ReservationsScreen() {
+  const calendar = useSearchParams().get("view") === "calendar";
+  const router = useRouter();
+  const pathname = usePathname();
+  return (
+    <>
+      <AdminPageHeader title="예약 관리" subtitle="대실·숙박 예약을 한곳에서 확인하고 관리해요"
+        actions={
+          <div role="group" aria-label="보기 방식" className="flex gap-1 rounded-md bg-muted p-1">
+            <button type="button" aria-pressed={!calendar} className={toggle(!calendar)}
+              onClick={() => calendar && router.replace(pathname, { scroll: false })}>목록</button>
+            <button type="button" aria-pressed={calendar} className={toggle(calendar)}
+              onClick={() => !calendar && router.replace(`${pathname}?view=calendar`, { scroll: false })}>캘린더</button>
+          </div>
+        } />
+      {calendar ? <CalendarView /> : <ListView />}
+    </>
+  );
+}
+
+function ListView() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -41,15 +64,6 @@ export function ReservationsScreen() {
 
   return (
     <>
-      <AdminPageHeader title="예약 관리" subtitle="대실·숙박 예약을 한곳에서 확인하고 관리해요"
-        actions={
-          <div role="group" aria-label="보기 방식" className="flex gap-1 rounded-md bg-muted p-1">
-            <button type="button" aria-pressed="true" className="flex h-9 items-center rounded-sm bg-surface px-6 text-heading-s font-bold shadow-card">목록</button>
-            <button type="button" aria-pressed="false" aria-disabled="true" aria-describedby="calendar-soon" title="준비 중"
-              className="flex h-9 cursor-not-allowed items-center px-6 text-body-m font-medium text-ink-3">캘린더</button>
-            <span id="calendar-soon" className="sr-only">준비 중</span>
-          </div>
-        } />
       <div className="flex items-center gap-3">
         <label className="flex h-11 flex-1 items-center gap-2 rounded-md border border-field bg-surface px-3.5 focus-within:border-pine">
           <Search className="size-[18px] text-ink-3" strokeWidth={1.75} aria-hidden />

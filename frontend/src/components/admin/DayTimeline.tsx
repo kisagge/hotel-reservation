@@ -17,8 +17,8 @@ const describe = (s: Segment) => `${KIND_KO[s.kind]} ${hhmm(s.fromHour)}–${hhm
 export const TIMELINE_LEGEND: [string, string][] = [["bg-pine", "숙박"], ["bg-amber", "대실"], ["bg-muted", "청소"], ["bg-canvas", "예약 가능"]];
 
 /** 24h occupancy bar (A1 "오늘의 객실 타임라인", also reused by the A3 rule preview). */
-export function DayTimeline({ items, day, height = 64, compact = false, segments }: {
-  items?: TimelineItem[]; day?: YMD; height?: number; compact?: boolean; segments?: Segment[];
+export function DayTimeline({ items, day, height = 64, compact = false, labels = true, segments }: {
+  items?: TimelineItem[]; day?: YMD; height?: number; compact?: boolean; labels?: boolean; segments?: Segment[];
 }) {
   const segs = segments ?? timelineSegments(items ?? [], day!);
   return (
@@ -30,7 +30,7 @@ export function DayTimeline({ items, day, height = 64, compact = false, segments
       <div aria-hidden className="relative w-full overflow-hidden rounded-md border border-line bg-canvas" style={{ height }}>
         {segs.map((s, i) => {
           const width = s.toHour - s.fromHour;
-          const wide = width >= (compact ? 2.5 : 1.5);
+          const wide = labels && width >= (compact ? 2.5 : 1.5);
           return (
             <div key={i} title={describe(s)}
               className={cn("absolute inset-y-0 flex flex-col justify-center overflow-hidden whitespace-nowrap px-3", STYLE[s.kind], compact && "items-center px-1")}
