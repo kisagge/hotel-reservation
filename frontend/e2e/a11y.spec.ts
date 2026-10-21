@@ -73,7 +73,10 @@ test.describe("admin screens (1440px)", () => {
     }
     await page.goto("/admin/reservations");
     await page.getByRole("button", { name: "예약 추가" }).click();
-    await page.getByRole("dialog", { name: "예약 추가" }).getByText(/원$|요금을 확인/).first().waitFor();
+    // Wait for the quote to settle, whatever it says (price, taken slot…): the wording depends on the time of day.
+    const quote = page.getByRole("dialog", { name: "예약 추가" }).locator("[aria-live=polite]");
+    await expect(quote).not.toContainText("요금을 확인하고 있어요");
+    await expect(quote).not.toHaveAttribute("aria-busy", "true");
     await audit(page, "admin-booking-dialog");
   });
 });

@@ -11,6 +11,7 @@ import { ApiError, useRoom } from "@/lib/api/queries";
 import { errorMessage } from "@/lib/errors";
 import { formatAdminRange, formatWon } from "@/lib/format";
 import { kstParts, todayKst, type YMD } from "@/lib/time";
+import { defaultSlot } from "./bookingDefaults";
 
 export type BookingDialogMode = { kind: "create" } | { kind: "reschedule"; reservation: AdminReservation };
 type Kind = "DAYUSE" | "STAY";
@@ -29,7 +30,8 @@ function Field({ label, children }: { label: string; children: (id: string) => R
 }
 
 function initial(mode: BookingDialogMode) {
-  if (mode.kind === "create") return { kind: "DAYUSE" as Kind, date: todayKst(), hour: null, nights: 1 };
+  // create: date and hour stay null ("next open slot") until the admin picks them
+  if (mode.kind === "create") return { kind: "DAYUSE" as Kind, date: null, hour: null, nights: 1 };
   const r = mode.reservation;
   const start = kstParts(r.start_at);
   return { kind: (r.type === "STAY" ? "STAY" : "DAYUSE") as Kind, date: start.ymd, hour: r.type === "STAY" ? null : start.hour, nights: r.nights ?? 1 };
@@ -62,7 +64,8 @@ function Form({ titleId, mode, onClose, onDone, walkIn, reschedule }: {
   const rules = room.data?.rules;
   const start = initial(mode);
   const [kind, setKind] = useState<Kind>(start.kind);
-  const [date, setDate] = useState<YMD>(start.date);
+  const [date, setDate] = useState<YMD | null>(start.date);
+  const [openedAt] = useState(() => kstParts(new Date().toISOString()));
   const [hour, setHour] = useState<number | null>(start.hour);
   const [nights, setNights] = useState(start.nights);
   const [name, setName] = useState("");
@@ -71,10 +74,11 @@ function Form({ titleId, mode, onClose, onDone, walkIn, reschedule }: {
   const failure = walkIn.error ?? reschedule.error;
 
   const editing = mode.kind === "reschedule" ? mode.reservation : null;
-  const firstHour = rules?.dayuse_first_start_hour ?? 0;
-  const startHour = hour ?? firstHour;
-  const body: QuoteBody | null = !rules || !YMD_RE.test(date) ? null
-    : kind === "DAYUSE" ? { type: "DAYUSE", date, start_hour: startHour } : { type: "STAY", check_in: date, nights };
+  const auto = rules ? defaultSlot(rules, openedAt) : null;
+  const day = date ?? auto?.date ?? openedAt.ymd;
+  const startHour = hour ?? auto?.hour ?? rules?.dayuse_first_start_hour ?? 0;
+  const body: QuoteBody | null = !rules || !YMD_RE.test(day) ? null
+    : kind === "DAYUSE" ? { type: "DAYUSE", date: day, start_hour: startHour } : { type: "STAY", check_in: day, nights };
   const quote = useAdminQuote(body, editing?.id ?? null);
   const q = quote.data;
   const guestOk = !!editing || (name.trim().length > 0 && phone.trim().length >= 9);
@@ -107,7 +111,7 @@ function Form({ titleId, mode, onClose, onDone, walkIn, reschedule }: {
         items={[{ value: "DAYUSE", label: "대실" }, { value: "STAY", label: "숙박" }]} />
       <div className="flex gap-3">
         <Field label={kind === "DAYUSE" ? "날짜" : "체크인 날짜"}>
-          {(id) => <input id={id} data-autofocus type="date" required min={todayKst()} value={date} onChange={(e) => setDate(e.target.value)} className={control} />}
+          {(id) => <input id={id} data-autofocus type="date" required min={todayKst()} value={day} onChange={(e) => { setDate(e.target.value); setHour(startHour); }} className={control} />}
         </Field>
         {kind === "DAYUSE" ? (
           <Field label="입실 시간">
