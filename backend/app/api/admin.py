@@ -75,6 +75,14 @@ def get_dashboard(db: DB, now: Now) -> DashboardOut:
                         upcoming=[to_out(r, now) for r in d["upcoming"]])
 
 
+@router.get("/occupancy", response_model=list[TimelineItem])
+def get_occupancy(db: DB, date_from: date, date_to: date) -> list[TimelineItem]:
+    """What occupies the room on each day of a range (bookings, cleaning buffers and blocks) for the calendar."""
+    if date_to < date_from or (date_to - date_from).days >= svc.OCCUPANCY_MAX_DAYS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "INVALID_RANGE")
+    return [TimelineItem.model_validate(r) for r in svc.occupancy(db, date_from, date_to)]
+
+
 # ---- settings ----
 @router.get("/settings", response_model=SettingsIn)
 def get_room_settings(db: DB) -> SettingsIn:

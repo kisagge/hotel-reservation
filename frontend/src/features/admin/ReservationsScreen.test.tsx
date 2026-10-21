@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeApi, json } from "@/test/fakeApi";
@@ -54,5 +54,59 @@ describe("ReservationsScreen", () => {
     renderWithProviders(<ReservationsScreen />);
     expect(await screen.findByRole("alert")).toHaveTextContent("시작일이 종료일보다 늦어요");
     expect(api.count("GET /api/admin/reservations")).toBe(0);
+  });
+});
+
+describe("ReservationsScreen · calendar view", () => {
+  const OCC = [
+    { id: 1, type: "DAYUSE", start_at: "2026-10-23T10:00:00+09:00", end_at: "2026-10-23T14:00:00+09:00",
+      blocked_until: "2026-10-23T15:00:00+09:00", guest_name: "이서연", block_reason: null },
+    { id: 9, type: "BLOCK", start_at: "2026-10-23T18:00:00+09:00", end_at: "2026-10-24T00:00:00+09:00",
+      blocked_until: "2026-10-24T00:00:00+09:00", guest_name: "", block_reason: "보일러 점검" },
+  ];
+
+  it("switches from the list to the calendar", async () => {
+    fakeApi({ "GET /api/admin/reservations": () => json(EMPTY), "GET /api/admin/occupancy": () => json([]) });
+    renderWithProviders(<ReservationsScreen />);
+    await userEvent.click(screen.getByRole("button", { name: "캘린더" }));
+    expect(lastUrl().get("view")).toBe("calendar");
+    expect(await screen.findByRole("button", { name: "캘린더" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("table")).toBeInTheDocument();
+  });
+
+  it("shows the selected day's timeline and bookings, and opens a booking's detail", async () => {
+    nav.replace("/admin/reservations?view=calendar&m=2026-10&day=2026-10-23");
+    let query = "";
+    fakeApi({
+      "GET /api/admin/occupancy": (req) => { query = new URL(req.url).search; return json(OCC); },
+      "GET /api/admin/reservations/1": () => json({ detail: "NOT_FOUND" }, 404),
+    });
+    renderWithProviders(<ReservationsScreen />);
+    const panel = await screen.findByRole("region", { name: "10월 23일 (금)" });
+    expect(query).toBe("?date_from=2026-10-01&date_to=2026-10-31");
+    expect(await within(panel).findByRole("list", { name: "시간대별 객실 상태" })).toBeInTheDocument();
+    const dayList = within(panel).getByRole("list", { name: "이날 일정" });
+    expect(within(dayList).getByText("차단 · 보일러 점검")).toBeInTheDocument();
+    expect(within(dayList).getAllByRole("button")).toHaveLength(1); // blocks have no booking detail
+    await userEvent.click(within(dayList).getByRole("button", { name: /이서연/ }));
+    expect(lastUrl().get("id")).toBe("1");
+    expect(lastUrl().get("view")).toBe("calendar");
+  });
+
+  it("moves keyboard focus into the opened booking and back to it on close", async () => {
+    nav.replace("/admin/reservations?view=calendar&m=2026-10&day=2026-10-23");
+    fakeApi({
+      "GET /api/admin/occupancy": () => json(OCC),
+      "GET /api/admin/reservations/1": () => json({ detail: "NOT_FOUND" }, 404),
+    });
+    renderWithProviders(<ReservationsScreen />);
+    const opener = await screen.findByRole("button", { name: /이서연/ });
+    opener.focus();
+    await userEvent.keyboard("{Enter}");
+    await screen.findByText("예약을 찾을 수 없어요");
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.contains(screen.getByText("예약을 찾을 수 없어요"))).toBe(true);
+    await userEvent.click(screen.getByRole("button", { name: "닫기" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: /이서연/ })));
   });
 });

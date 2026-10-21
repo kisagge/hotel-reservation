@@ -273,6 +273,15 @@ def dashboard(db: Session, now: datetime) -> dict:
     }
 
 
+OCCUPANCY_MAX_DAYS = 62  # a month view plus the spill-over weeks around it
+
+
+def occupancy(db: Session, date_from: date, date_to: date) -> list[Reservation]:
+    """CONFIRMED bookings and blocks occupying any KST day in [date_from, date_to] (admin calendar)."""
+    stmt = select(Reservation).where(*occupying(kst(date_from), kst(date_to + timedelta(days=1))))
+    return list(db.scalars(stmt.order_by(Reservation.start_at, Reservation.id)))
+
+
 def create_block(db: Session, start: datetime, end: datetime, reason: str) -> Reservation:
     """Blocks occupy exactly [start, end); the same exclusion constraint guards them against bookings."""
     lock_days(db, start, end)

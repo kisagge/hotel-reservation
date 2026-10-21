@@ -12,7 +12,7 @@ export type AdminFilters = {
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** A real calendar date in YYYY-MM-DD (rejects 2026-02-30, 2026-99-99). */
-const isYmd = (v: string | null): v is YMD => !!v && YMD_RE.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().startsWith(v);
+export const isYmd = (v: string | null): v is YMD => !!v && YMD_RE.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().startsWith(v);
 const monthStart = (today: YMD) => `${today.slice(0, 7)}-01`;
 const monthEnd = (today: YMD) => {
   const [y, m] = today.split("-").map(Number);

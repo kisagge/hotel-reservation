@@ -67,7 +67,7 @@ test.describe("admin screens (1440px)", () => {
   test("admin pages", async ({ page }) => {
     await login(page, ADMIN, "/admin");
     await audit(page, "admin-dashboard");
-    for (const [name, url] of [["admin-reservations", "/admin/reservations?id=1"], ["admin-settings", "/admin/settings"], ["admin-room", "/admin/room"]] as const) {
+    for (const [name, url] of [["admin-reservations", "/admin/reservations?id=1"], ["admin-calendar", `/admin/reservations?view=calendar&day=${day(0)}`], ["admin-settings", "/admin/settings"], ["admin-room", "/admin/room"]] as const) {
       await page.goto(url);
       await audit(page, name);
     }

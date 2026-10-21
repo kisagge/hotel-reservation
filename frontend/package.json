@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:tz": "TZ=America/Los_Angeles vitest run src/lib",
+    "test:tz": "TZ=America/Los_Angeles vitest run src/lib src/components/admin src/features/admin/calendar.test.ts",
     "e2e": "playwright test",
     "gen:api": "openapi-typescript http://localhost:8000/openapi.json -o src/lib/api/schema.d.ts"
   },

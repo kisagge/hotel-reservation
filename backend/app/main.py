@@ -1,3 +1,5 @@
+import logging
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -9,7 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import admin, auth, public, reservations
 from app.services.reservations import ServiceBusy
 from app.core.config import get_settings
+from app.core.logging import configure_logging, request_id_from, request_id_var
 
+
+access_log = logging.getLogger("haru.access")
+error_log = logging.getLogger("haru.error")
 
 DEFAULT_SECRET = "dev-only-secret-change-me-in-production-0123456789"
 
@@ -32,6 +38,7 @@ SECURITY_HEADERS = {
 def create_app() -> FastAPI:
     settings = get_settings()
     assert_safe_settings(settings)
+    configure_logging(settings)
     app = FastAPI(title="HARU API", version="0.1.0")
     app.add_middleware(
         CORSMiddleware,
@@ -40,6 +47,28 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def request_context(request: Request, call_next):
+        """Request ID + one access log line per request; unhandled errors become a JSON 500 that names the ID.
+        Registered before security_headers, so that (outer) middleware still decorates the 500."""
+        rid = request_id_from(request.headers.get("x-request-id"))
+        token = request_id_var.set(rid)
+        started = time.perf_counter()
+        try:
+            try:
+                response = await call_next(request)
+            except Exception:
+                error_log.exception("unhandled error", extra={"method": request.method, "path": request.url.path})
+                response = JSONResponse({"detail": "INTERNAL_ERROR", "request_id": rid}, status_code=500)
+            response.headers["X-Request-ID"] = rid
+            # Path only: query strings carry search terms and phone numbers.
+            access_log.info("%s %s %s", request.method, request.url.path, response.status_code,
+                            extra={"method": request.method, "path": request.url.path, "status": response.status_code,
+                                   "duration_ms": round((time.perf_counter() - started) * 1000, 1)})
+            return response
+        finally:
+            request_id_var.reset(token)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):

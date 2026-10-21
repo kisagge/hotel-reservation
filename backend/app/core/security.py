@@ -1,4 +1,6 @@
+import hashlib
 import threading
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -8,6 +10,7 @@ from app.core.config import get_settings
 
 _hasher = PasswordHash.recommended()
 ALGORITHM = "HS256"
+DEVICE_TYP = "device"
 
 
 _limiter: threading.BoundedSemaphore | None = None
@@ -46,5 +49,35 @@ def create_access_token(user_id: int, role: str) -> str:
 
 
 def decode_access_token(token: str) -> dict:
-    """Raises jwt.PyJWTError on a bad or expired token."""
-    return jwt.decode(token, get_settings().jwt_secret, algorithms=[ALGORITHM])
+    """Raises jwt.PyJWTError on a bad or expired token, or on a device token presented as a session."""
+    payload = jwt.decode(token, get_settings().jwt_secret, algorithms=[ALGORITHM])
+    if payload.get("typ") == DEVICE_TYP:
+        raise jwt.InvalidTokenError("device token is not a session")
+    return payload
+
+
+def _email_digest(email: str) -> str:
+    return hashlib.sha256(email.lower().encode()).hexdigest()
+
+
+def create_device_token(email: str, device_id: str | None = None) -> str:
+    """Marks this browser as one that has signed in to `email`; carries no access rights by itself.
+    Pass the existing `device_id` to extend a known device instead of minting a new one (a new ID = a new bucket)."""
+    s = get_settings()
+    exp = datetime.now(UTC) + timedelta(days=s.device_cookie_days)
+    return jwt.encode({"typ": DEVICE_TYP, "sub": _email_digest(email), "jti": device_id or uuid.uuid4().hex, "exp": exp},
+                      s.jwt_secret, algorithm=ALGORITHM)
+
+
+def device_id_for(token: str | None, email: str) -> str | None:
+    """The device ID if `token` is a valid device token for this account, else None."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, get_settings().jwt_secret, algorithms=[ALGORITHM])
+    except jwt.PyJWTError:
+        return None
+    if payload.get("typ") != DEVICE_TYP or payload.get("sub") != _email_digest(email):
+        return None
+    jti = payload.get("jti")
+    return jti if isinstance(jti, str) and len(jti) == 32 else None

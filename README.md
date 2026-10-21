@@ -15,6 +15,8 @@
 
 <img src="docs/screenshots/admin-dashboard.png" alt="관리자 대시보드">
 
+<img src="docs/screenshots/admin-calendar.png" alt="관리자 예약 캘린더">
+
 ## 실행
 
 ### Docker로 한 번에
@@ -148,7 +150,7 @@ uv run python scripts/concurrency_check.py --bases http://localhost:8201,http://
 ### 6. 보안
 
 - **운영 모드(`HARU_ENVIRONMENT=prod`):**
-  - 기본 JWT 비밀키나 32자 미만 키로는 서버가 시작되지 않아요.
+  - 기본 JWT 비밀키, 32자 미만 키, `change-me`가 들어간 키로는 서버가 시작되지 않아요. 데모 데이터도 넣지 않아요.
   - 세션 쿠키는 `HttpOnly`, `SameSite=Lax`이고 운영 모드에서는 `Secure`가 붙어요.
 - **보안 헤더:**
   - 화면은 CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`가 붙어요.
@@ -156,9 +158,12 @@ uv run python scripts/concurrency_check.py --bases http://localhost:8201,http://
   - 업로드 파일은 `sandbox` CSP와 함께 내려가요.
 - **로그인·가입 요청 횟수 제한:** Postgres에 카운터를 둬서 서버가 여러 대여도 같은 한도를 써요. 느린 비밀번호 해시 계산보다 먼저 확인해요.
   - 로그인: 이메일당 15분 10회, IP당 10분 100회
+  - **기기 쿠키(OWASP 권장):** 한 번 로그인에 성공한 브라우저는 그 계정에 대해 기기별 한도(15분 10회)를 따로 받아요. 그래서 누군가 특정 계정이나 사이트 전체(Next 뒤에서는 모든 손님이 같은 IP)를 일부러 잠가도, 계정 주인은 평소 쓰던 브라우저로 계속 로그인할 수 있어요. 아는 브라우저의 로그인도 비밀번호 해시를 계산하므로 별도 상한이 있어요(계정당 15분 30회, IP당 10분 300회). 기기 ID는 로그인할 때마다 새로 만들지 않고 유지해요. 쿠키는 `/api/auth`에만 보내지고, 로그아웃해도 남고, 세션으로는 쓸 수 없어요.
   - 가입: IP당 10분 30회
   - 넘으면 `429` 응답과 함께 `Retry-After`로 다시 시도할 시점을 알려줘요.
   - Next 프록시는 손님 IP를 넘기지 않고 손님이 보낸 `X-Forwarded-For`를 그대로 통과시켜요. 그래서 이 값은 신뢰할 수 있는 앞단 서버(nginx, 호스팅 서비스)가 덮어쓰는 환경에서만 쓰고, 그때 `HARU_TRUST_FORWARDED_FOR=true`로 켜요. 켜면 마지막 항목(앞단 서버가 적은 값)만 써요. uvicorn은 `--no-proxy-headers`로 띄워야 해요. 안 그러면 uvicorn이 같은 헤더로 손님 주소를 바꿔 버려요(Docker와 E2E 명령에는 이미 들어 있어요).
+- **운영 로그:** 모든 응답에 `X-Request-ID`가 붙고, 요청마다 한 줄씩 로그를 남겨요(운영 모드는 JSON, 쿼리 문자열은 남기지 않음). 예상 못 한 오류는 요청 ID와 함께 기록하고, 손님에게는 `{"detail": "INTERNAL_ERROR", "request_id": …}`만 보여줘요.
+- **의존성·코드 스캔:** Dependabot이 매주 uv, npm, Actions, Docker 의존성 업데이트를 PR로 올리고, CodeQL이 Python, TypeScript, 워크플로를 스캔해요.
 - **업로드:** 업로드한 파일 형식은 파일 내용으로 판별해요(PNG, JPEG, WebP). DB 저장에 실패하면 파일도 지워요.
 
 ### 구조
@@ -185,6 +190,7 @@ frontend/src/
 | POST | `/api/reservations`, GET `/me`, POST `/{id}/cancel` | 예약(모의 결제) · 내 예약 · 취소 |
 | GET | `/api/admin/dashboard` | KPI, 오늘의 타임라인, 다가오는 예약 |
 | GET/POST | `/api/admin/reservations…` | 목록·필터·상세·취소 |
+| GET | `/api/admin/occupancy?date_from&date_to` | 기간의 점유(예약·차단, 최대 62일), 예약 캘린더용 |
 | GET/PUT | `/api/admin/settings` | 요금, 운영 시간, 청소 시간, 취소 마감 |
 | GET/POST/DELETE | `/api/admin/blocks` | 차단 일정 |
 | PUT / POST / DELETE | `/api/admin/room`, `/room/photos` | 객실 정보, 사진 |
