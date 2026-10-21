@@ -10,6 +10,7 @@ from app.api.deps import DB, DbId, require_admin
 from app.api.reservations import Now, Payments, cancel_or_409, to_out
 from app.core.config import get_settings
 from app.models import Reservation, Room, RoomPhoto
+from app.domain.rules import RuleViolation
 from app.schemas import (
     AdminReservationOut,
     BlockIn,
@@ -17,6 +18,8 @@ from app.schemas import (
     DashboardOut,
     PaymentOut,
     PhotoOut,
+    QuoteIn,
+    ReservationIn,
     ReservationPage,
     RoomIn,
     SettingsIn,
@@ -52,6 +55,35 @@ def list_reservations(
     items, total = svc.admin_list(db, date_from=date_from, date_to=date_to, type=type, status=status, q=q,
                                   page=page, size=size)
     return ReservationPage(items=[to_out(r, now) for r in items], total=total, page=page, size=size)
+
+
+@router.post("/reservations", response_model=AdminReservationOut, status_code=status.HTTP_201_CREATED)
+def create_walk_in(body: ReservationIn, db: DB, now: Now, payments: Payments) -> AdminReservationOut:
+    """A phone or front-desk booking: same rules, prices and overlap checks as a guest booking, no user account."""
+    try:
+        r = svc.create_reservation(db, None, body, body.guest_name, body.guest_phone, now, payments)
+    except RuleViolation as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, e.code)
+    except svc.SlotUnavailable as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, e.reason)
+    return to_admin_out(r, now, db)
+
+
+@router.post("/reservations/{reservation_id}/reschedule", response_model=AdminReservationOut)
+def reschedule(reservation_id: DbId, body: QuoteIn, db: DB, now: Now, payments: Payments) -> AdminReservationOut:
+    try:
+        r = svc.reschedule_reservation(db, reservation_id, body, now, payments)
+    except LookupError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "NOT_FOUND")
+    except RuleViolation as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, e.code)
+    except svc.SlotUnavailable as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, e.reason)
+    except svc.AlreadyCancelled:
+        raise HTTPException(status.HTTP_409_CONFLICT, "ALREADY_CANCELLED")
+    except svc.ReservationStarted:
+        raise HTTPException(status.HTTP_409_CONFLICT, "RESERVATION_STARTED")
+    return to_admin_out(r, now, db)
 
 
 @router.get("/reservations/{reservation_id}", response_model=AdminReservationOut)

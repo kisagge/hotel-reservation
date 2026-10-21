@@ -10,6 +10,9 @@ class PaymentProvider(Protocol):
     def refund(self, payment: Payment) -> None:
         """Return the money for a paid payment."""
 
+    def adjust(self, payment: Payment, amount: int) -> None:
+        """Charge or refund the difference when a booking's price changes (reschedule)."""
+
 
 class MockPaymentProvider:
     """Portfolio demo: always succeeds, moves no money."""
@@ -18,6 +21,9 @@ class MockPaymentProvider:
         return "MOCK"
 
     def refund(self, payment: Payment) -> None:
+        return None
+
+    def adjust(self, payment: Payment, amount: int) -> None:
         return None
 
 
