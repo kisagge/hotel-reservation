@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="HARU_", env_file=".env", extra="ignore")
 
     environment: Literal["dev", "test", "prod"] = "dev"
+    log_format: Literal["text", "json"] | None = None  # None → json in prod, text otherwise
     database_url: str = "postgresql+psycopg://haru:haru@localhost:5433/haru"
     jwt_secret: str = "dev-only-secret-change-me-in-production-0123456789"
     jwt_expire_minutes: int = 1440

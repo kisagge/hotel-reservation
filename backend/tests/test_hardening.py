@@ -142,6 +142,6 @@ def test_failed_photo_insert_leaves_no_file(admin_client, tmp_path, monkeypatch)
 
     monkeypatch.setattr(admin_api, "_commit_photo", boom)
     png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
-    with pytest.raises(RuntimeError, match="db down"):  # TestClient re-raises server errors
-        admin_client.post("/api/admin/room/photos", files={"file": ("x.png", png, "image/png")})
+    res = admin_client.post("/api/admin/room/photos", files={"file": ("x.png", png, "image/png")})
+    assert res.status_code == 500
     assert list(tmp_path.iterdir()) == []
