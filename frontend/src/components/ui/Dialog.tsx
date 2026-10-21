@@ -7,14 +7,17 @@ const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([di
 
 /**
  * Modal shell. Focus moves to the first `[data-autofocus]` (else the first focusable) on open, Tab is trapped
- * inside, Escape and the backdrop close it, and focus returns to whatever opened it.
+ * inside, Escape and the backdrop close it, and focus returns to whatever opened it. `dismissible={false}` (e.g.
+ * while a request is in flight) ignores Escape and the backdrop.
  */
-export function Dialog({ open, onClose, labelledBy, describedBy, className, children }: {
-  open: boolean; onClose: () => void; labelledBy: string; describedBy?: string; className?: string; children: ReactNode;
+export function Dialog({ open, onClose, labelledBy, describedBy, className, dismissible = true, children }: {
+  open: boolean; onClose: () => void; labelledBy: string; describedBy?: string; className?: string; dismissible?: boolean;
+  children: ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
-  const closeRef = useRef(onClose);
-  useEffect(() => { closeRef.current = onClose; });
+  const closeRef = useRef(() => {});
+  const pressedBackdrop = useRef(false);
+  useEffect(() => { closeRef.current = dismissible ? onClose : () => {}; });
 
   // Runs only when the dialog opens/closes, so parent re-renders (inline onClose, loading) never move focus.
   useEffect(() => {
@@ -41,9 +44,13 @@ export function Dialog({ open, onClose, labelledBy, describedBy, className, chil
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-inverse/40 p-4 sm:items-center" onClick={onClose}>
+    // Close only for a click that both starts and ends on the backdrop: a text selection dragged out of a field
+    // must not throw the form away.
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-inverse/40 p-4 sm:items-center"
+      onMouseDown={(e) => { pressedBackdrop.current = e.target === e.currentTarget; }}
+      onClick={(e) => { if (pressedBackdrop.current && e.target === e.currentTarget) closeRef.current(); pressedBackdrop.current = false; }}>
       <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={labelledBy} aria-describedby={describedBy}
-        className={cn("w-full max-w-sm rounded-xl bg-surface p-6 shadow-card", className)} onClick={(e) => e.stopPropagation()}>
+        className={cn("w-full max-w-sm rounded-xl bg-surface p-6 shadow-card", className)}>
         {children}
       </div>
     </div>

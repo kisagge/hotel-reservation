@@ -122,4 +122,52 @@ describe("BookingDialog", () => {
     expect(await within(dialog).findByText("지금 일정과 같아요")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "일정 변경하기" })).toBeDisabled();
   });
+
+  it("cannot be dismissed while the request is in flight", async () => {
+    fakeApi({
+      "GET /api/room": () => json(ROOM),
+      "POST /api/admin/quotes": () => json(quote({ start_at: "2026-10-23T16:00:00+09:00", end_at: "2026-10-23T20:00:00+09:00" })),
+      "POST /api/admin/reservations/5/reschedule": () => new Promise<Response>(() => {}),
+    });
+    const onClose = vi.fn();
+    renderWithProviders(<BookingDialog open mode={{ kind: "reschedule", reservation: RES }} onClose={onClose} onDone={() => {}} />);
+    const dialog = await screen.findByRole("dialog", { name: "일정 변경" });
+    const move = within(dialog).getByRole("button", { name: "일정 변경하기" });
+    await waitFor(() => expect(move).toBeEnabled());
+    await userEvent.click(move);
+    await userEvent.keyboard("{Escape}");
+    expect(within(dialog).getByRole("button", { name: "닫기" })).toBeDisabled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("re-checks availability after the server rejects the slot", async () => {
+    const api = fakeApi({
+      "GET /api/room": () => json(ROOM),
+      "POST /api/admin/quotes": () => json(quote({ start_at: "2026-10-23T16:00:00+09:00", end_at: "2026-10-23T20:00:00+09:00" })),
+      "POST /api/admin/reservations/5/reschedule": () => json({ detail: "SLOT_UNAVAILABLE" }, 409),
+    });
+    renderWithProviders(<BookingDialog open mode={{ kind: "reschedule", reservation: RES }} onClose={() => {}} onDone={() => {}} />);
+    const dialog = await screen.findByRole("dialog", { name: "일정 변경" });
+    const move = within(dialog).getByRole("button", { name: "일정 변경하기" });
+    await waitFor(() => expect(move).toBeEnabled());
+    const before = api.count("POST /api/admin/quotes");
+    await userEvent.click(move);
+    await within(dialog).findByRole("alert");
+    await waitFor(() => expect(api.count("POST /api/admin/quotes")).toBeGreaterThan(before));
+  });
+
+  it("keeps the dialog open when a drag that started in a field ends on the backdrop", async () => {
+    fakeApi({ "GET /api/room": () => json(ROOM), "POST /api/admin/quotes": () => json(quote()) });
+    const onClose = vi.fn();
+    renderWithProviders(<BookingDialog open mode={{ kind: "create" }} onClose={onClose} onDone={() => {}} />);
+    const dialog = await screen.findByRole("dialog", { name: "예약 추가" });
+    const backdrop = dialog.parentElement!;
+    fireEvent.mouseDown(within(dialog).getByLabelText("예약자 이름"));
+    fireEvent.mouseUp(backdrop);
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.mouseDown(backdrop);
+    fireEvent.click(backdrop);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

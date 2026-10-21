@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/components/ui/cn";
 import { Dialog } from "@/components/ui/Dialog";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { TextField } from "@/components/ui/TextField";
@@ -39,16 +40,23 @@ export function BookingDialog({ open, mode, onClose, onDone }: {
   open: boolean; mode: BookingDialogMode; onClose: () => void; onDone: (r: AdminReservation) => void;
 }) {
   const titleId = useId();
+  // Owned here, not by the form: the dialog cannot be dismissed while a request is in flight, so its result
+  // (toast, reveal) always lands.
+  const walkIn = useWalkIn();
+  const reschedule = useReschedule();
+  const pending = walkIn.isPending || reschedule.isPending;
   return (
-    <Dialog open={open} onClose={onClose} labelledBy={titleId} className="max-w-md">
+    <Dialog open={open} onClose={onClose} dismissible={!pending} labelledBy={titleId} className="max-w-md">
       {/* keyed so reopening for another booking starts from that booking's values */}
-      <Form key={mode.kind === "create" ? "create" : mode.reservation.id} titleId={titleId} mode={mode} onClose={onClose} onDone={onDone} />
+      <Form key={mode.kind === "create" ? "create" : mode.reservation.id} titleId={titleId} mode={mode} onClose={onClose}
+        onDone={onDone} walkIn={walkIn} reschedule={reschedule} />
     </Dialog>
   );
 }
 
-function Form({ titleId, mode, onClose, onDone }: {
+function Form({ titleId, mode, onClose, onDone, walkIn, reschedule }: {
   titleId: string; mode: BookingDialogMode; onClose: () => void; onDone: (r: AdminReservation) => void;
+  walkIn: ReturnType<typeof useWalkIn>; reschedule: ReturnType<typeof useReschedule>;
 }) {
   const room = useRoom();
   const rules = room.data?.rules;
@@ -59,8 +67,6 @@ function Form({ titleId, mode, onClose, onDone }: {
   const [nights, setNights] = useState(start.nights);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const walkIn = useWalkIn();
-  const reschedule = useReschedule();
   const pending = walkIn.isPending || reschedule.isPending;
   const failure = walkIn.error ?? reschedule.error;
 
@@ -83,8 +89,11 @@ function Form({ titleId, mode, onClose, onDone }: {
     else walkIn.mutate({ ...body, guest_name: name.trim(), guest_phone: phone.trim() }, done);
   };
 
-  const hours = rules ? Array.from({ length: rules.dayuse_last_start_hour - rules.dayuse_first_start_hour + 1 }, (_, i) => rules.dayuse_first_start_hour + i) : [];
-  const nightOptions = rules ? Array.from({ length: rules.stay_max_nights }, (_, i) => i + 1) : [1];
+  // Today's rules, plus the booking's own value if the rules have since changed (the quote then says why).
+  const withCurrent = (values: number[], current: number | null) =>
+    current === null || values.includes(current) ? values : [...values, current].sort((a, b) => a - b);
+  const hours = withCurrent(rules ? Array.from({ length: rules.dayuse_last_start_hour - rules.dayuse_first_start_hour + 1 }, (_, i) => rules.dayuse_first_start_hour + i) : [], hour);
+  const nightOptions = withCurrent(rules ? Array.from({ length: rules.stay_max_nights }, (_, i) => i + 1) : [1], nights);
 
   return (
     <form className="flex flex-col gap-5" onSubmit={(e) => { e.preventDefault(); if (canSubmit) submit(); }}>
@@ -124,7 +133,8 @@ function Form({ titleId, mode, onClose, onDone }: {
           <TextField className="flex-1" label="연락처" type="tel" maxLength={20} autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </div>
       )}
-      <div aria-live="polite" className="flex min-h-[64px] flex-col justify-center rounded-md bg-canvas px-4 py-3">
+      <div aria-live="polite" aria-busy={quote.isPlaceholderData || undefined}
+        className={cn("flex min-h-[64px] flex-col justify-center rounded-md bg-canvas px-4 py-3 transition-opacity", quote.isPlaceholderData && "opacity-50")}>
         {quote.isError ? (
           <p className="text-body-m text-danger">{errorMessage(quote.error instanceof ApiError ? quote.error.code : null)}</p>
         ) : !q ? (
@@ -150,7 +160,7 @@ function Form({ titleId, mode, onClose, onDone }: {
       </div>
       {failure && <p role="alert" className="-mt-2 text-body-m text-danger">{errorMessage(failure instanceof ApiError ? failure.code : null)}</p>}
       <div className="flex gap-2">
-        <Button variant="secondary" size="m" className="flex-1" onClick={onClose}>닫기</Button>
+        <Button variant="secondary" size="m" className="flex-1" disabled={pending} onClick={onClose}>닫기</Button>
         <Button type="submit" size="m" className="flex-1" disabled={!canSubmit} loading={pending}>{editing ? "일정 변경하기" : "예약 만들기"}</Button>
       </div>
     </form>

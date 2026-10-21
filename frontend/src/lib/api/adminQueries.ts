@@ -80,6 +80,7 @@ export function useAdminQuote(body: QuoteBody | null, excludeId: number | null) 
   return useQuery({
     queryKey: ["admin", "quote", body, excludeId] as const,
     enabled: !!body,
+    staleTime: 0, // availability changes under us; revisiting an input must re-check it
     placeholderData: keepPreviousData,
     queryFn: () => unwrap(api.POST("/api/admin/quotes", { body: body!, params: { query: excludeId ? { exclude_id: excludeId } : {} } })),
   });
@@ -94,6 +95,8 @@ function useBookingChange<V>(mutationFn: (v: V) => Promise<AdminReservation>) {
       qc.invalidateQueries({ queryKey: adminKeys.all });
       qc.invalidateQueries({ queryKey: qk.availability });
     },
+    // a 409 means the quote on screen is out of date
+    onError: () => qc.invalidateQueries({ queryKey: ["admin", "quote"] }),
   });
 }
 

@@ -66,7 +66,7 @@ export function CalendarView({ onReschedule }: { onReschedule: (r: AdminReservat
       </section>
       {id ? (
         <div ref={detailRef} tabIndex={-1} className="shrink-0 outline-none">
-          <ReservationDetail id={id} onReschedule={onReschedule} onClose={() => go(cal)} />
+          <ReservationDetail key={id} id={id} onReschedule={onReschedule} onClose={() => go(cal)} />
         </div>
       ) : (
         <DayPanel day={cal.day} items={items} loading={occ.isPending} onOpen={(rid) => go(cal, rid)} />

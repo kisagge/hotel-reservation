@@ -136,7 +136,7 @@ function ListView({ onReschedule }: { onReschedule: (r: AdminReservation) => voi
             </nav>
           )}
         </section>
-        <ReservationDetail id={f.id} onReschedule={onReschedule}
+        <ReservationDetail key={f.id ?? "none"} id={f.id} onReschedule={onReschedule}
           onClose={() => router.replace(`${pathname}?${filtersToSearch({ ...f, id: null })}`, { scroll: false })} />
       </div>
     </>
