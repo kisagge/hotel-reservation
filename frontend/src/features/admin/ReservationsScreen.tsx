@@ -3,13 +3,15 @@
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ReservationDetail } from "@/components/admin/ReservationDetail";
 import { ReservationTable } from "@/components/admin/ReservationTable";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { PAGE_SIZE, useAdminReservations } from "@/lib/api/adminQueries";
-import { todayKst } from "@/lib/time";
+import { PAGE_SIZE, useAdminReservations, type AdminReservation } from "@/lib/api/adminQueries";
+import { kstParts, todayKst } from "@/lib/time";
+import { BookingDialog, type BookingDialogMode } from "./BookingDialog";
 import { CalendarView } from "./CalendarView";
 import { filtersFromSearch, filtersToSearch, type AdminFilters } from "./filters";
 
@@ -19,26 +21,49 @@ const toggle = (on: boolean) => cn("flex h-9 items-center rounded-sm px-6", on ?
 
 /** A2 · 예약 관리 (Figma 11:52): list or calendar view. Filters, view and the selected row live in the URL. */
 export function ReservationsScreen() {
-  const calendar = useSearchParams().get("view") === "calendar";
+  const sp = useSearchParams();
+  const calendar = sp.get("view") === "calendar";
   const router = useRouter();
   const pathname = usePathname();
+  const toast = useToast();
+  const [dialog, setDialog] = useState<BookingDialogMode | null>(null);
+  const onReschedule = (reservation: AdminReservation) => setDialog({ kind: "reschedule", reservation });
+
+  /** Show the booking just created or moved: its detail, and in the calendar also its day. */
+  const reveal = (r: AdminReservation) => {
+    const next = new URLSearchParams(sp.toString());
+    next.set("id", String(r.id));
+    if (calendar) {
+      const day = kstParts(r.start_at).ymd;
+      next.set("m", day.slice(0, 7));
+      next.set("day", day);
+    }
+    router.replace(`${pathname}?${next}`, { scroll: false });
+  };
   return (
     <>
       <AdminPageHeader title="예약 관리" subtitle="대실·숙박 예약을 한곳에서 확인하고 관리해요"
-        actions={
+        actions={<>
+          <Button size="m" onClick={() => setDialog({ kind: "create" })}>예약 추가</Button>
           <div role="group" aria-label="보기 방식" className="flex gap-1 rounded-md bg-muted p-1">
             <button type="button" aria-pressed={!calendar} className={toggle(!calendar)}
               onClick={() => calendar && router.replace(pathname, { scroll: false })}>목록</button>
             <button type="button" aria-pressed={calendar} className={toggle(calendar)}
               onClick={() => !calendar && router.replace(`${pathname}?view=calendar`, { scroll: false })}>캘린더</button>
           </div>
-        } />
-      {calendar ? <CalendarView /> : <ListView />}
+        </>} />
+      {calendar ? <CalendarView onReschedule={onReschedule} /> : <ListView onReschedule={onReschedule} />}
+      <BookingDialog open={!!dialog} mode={dialog ?? { kind: "create" }} onClose={() => setDialog(null)}
+        onDone={(r) => {
+          toast(dialog?.kind === "reschedule" ? `일정을 변경했어요 · ${r.code}` : `예약을 추가했어요 · ${r.code}`);
+          setDialog(null);
+          reveal(r);
+        }} />
     </>
   );
 }
 
-function ListView() {
+function ListView({ onReschedule }: { onReschedule: (r: AdminReservation) => void }) {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -111,7 +136,8 @@ function ListView() {
             </nav>
           )}
         </section>
-        <ReservationDetail id={f.id} onClose={() => router.replace(`${pathname}?${filtersToSearch({ ...f, id: null })}`, { scroll: false })} />
+        <ReservationDetail id={f.id} onReschedule={onReschedule}
+          onClose={() => router.replace(`${pathname}?${filtersToSearch({ ...f, id: null })}`, { scroll: false })} />
       </div>
     </>
   );

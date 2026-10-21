@@ -72,6 +72,40 @@ export function useAdminCancel() {
   });
 }
 
+export type QuoteBody = components["schemas"]["DayUseQuoteIn"] | components["schemas"]["StayQuoteIn"];
+export type WalkInBody = components["schemas"]["DayUseReservationIn"] | components["schemas"]["StayReservationIn"];
+
+/** Price and availability for an admin booking form; `excludeId` ignores the booking being moved. */
+export function useAdminQuote(body: QuoteBody | null, excludeId: number | null) {
+  return useQuery({
+    queryKey: ["admin", "quote", body, excludeId] as const,
+    enabled: !!body,
+    placeholderData: keepPreviousData,
+    queryFn: () => unwrap(api.POST("/api/admin/quotes", { body: body!, params: { query: excludeId ? { exclude_id: excludeId } : {} } })),
+  });
+}
+
+function useBookingChange<V>(mutationFn: (v: V) => Promise<AdminReservation>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: (r) => {
+      qc.setQueryData(adminKeys.reservation(r.id), r);
+      qc.invalidateQueries({ queryKey: adminKeys.all });
+      qc.invalidateQueries({ queryKey: qk.availability });
+    },
+  });
+}
+
+export function useWalkIn() {
+  return useBookingChange((body: WalkInBody) => unwrap(api.POST("/api/admin/reservations", { body })));
+}
+
+export function useReschedule() {
+  return useBookingChange(({ id, body }: { id: number; body: QuoteBody }) =>
+    unwrap(api.POST("/api/admin/reservations/{reservation_id}/reschedule", { params: { path: { reservation_id: id } }, body })));
+}
+
 export type Settings = components["schemas"]["SettingsIn"];
 export type RoomIn = components["schemas"]["RoomIn"];
 

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, DbId, require_admin
+from app.api.public import quote_out
 from app.api.reservations import Now, Payments, cancel_or_409, to_out
 from app.core.config import get_settings
 from app.models import Reservation, Room, RoomPhoto
@@ -19,6 +20,7 @@ from app.schemas import (
     PaymentOut,
     PhotoOut,
     QuoteIn,
+    QuoteOut,
     ReservationIn,
     ReservationPage,
     RoomIn,
@@ -67,6 +69,13 @@ def create_walk_in(body: ReservationIn, db: DB, now: Now, payments: Payments) ->
     except svc.SlotUnavailable as e:
         raise HTTPException(status.HTTP_409_CONFLICT, e.reason)
     return to_admin_out(r, now, db)
+
+
+@router.post("/quotes", response_model=QuoteOut)
+def admin_quote(body: QuoteIn, db: DB, now: Now,
+                exclude_id: Annotated[int | None, Query(ge=1, le=2_147_483_647)] = None) -> QuoteOut:
+    """Like /api/quotes, optionally ignoring one booking (the one being rescheduled)."""
+    return quote_out(db, body, now, exclude_id)
 
 
 @router.post("/reservations/{reservation_id}/reschedule", response_model=AdminReservationOut)

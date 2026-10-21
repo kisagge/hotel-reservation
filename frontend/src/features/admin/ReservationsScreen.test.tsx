@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeApi, json } from "@/test/fakeApi";
+import { ROOM } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { ReservationsScreen } from "./ReservationsScreen";
 
@@ -108,5 +109,33 @@ describe("ReservationsScreen · calendar view", () => {
     expect(document.activeElement?.contains(screen.getByText("예약을 찾을 수 없어요"))).toBe(true);
     await userEvent.click(screen.getByRole("button", { name: "닫기" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: /이서연/ })));
+  });
+
+  it("opens a walk-in booking it just created on that booking's day", async () => {
+    nav.replace("/admin/reservations?view=calendar&m=2026-10&day=2026-10-23");
+    fakeApi({
+      "GET /api/admin/occupancy": () => json([]),
+      "GET /api/room": () => json(ROOM),
+      "POST /api/admin/quotes": () => json({ type: "DAYUSE", start_at: "2026-11-02T15:00:00+09:00", end_at: "2026-11-02T19:00:00+09:00",
+        nights: null, lines: [], total: 35000, available: true, reason: null }),
+      "POST /api/admin/reservations": () => json({ id: 7, code: "HR-1102-0007", type: "DAYUSE", status: "CONFIRMED",
+        display_status: "CONFIRMED", start_at: "2026-11-02T15:00:00+09:00", end_at: "2026-11-02T19:00:00+09:00",
+        blocked_until: "2026-11-02T20:00:00+09:00", nights: null, guest_name: "현장손님", guest_phone: "010-2222-3333",
+        total_price: 35000, created_at: "2026-10-21T09:00:00+09:00", cancelled_at: null, cancel_deadline_at: null,
+        can_cancel: false, user_email: null, cancelled_by: null, payment: null }, 201),
+      "GET /api/admin/reservations/7": () => json({ detail: "NOT_FOUND" }, 404),
+    });
+    renderWithProviders(<ReservationsScreen />);
+    await userEvent.click(screen.getByRole("button", { name: "예약 추가" }));
+    const dialog = await screen.findByRole("dialog", { name: "예약 추가" });
+    await userEvent.type(within(dialog).getByLabelText("예약자 이름"), "현장손님");
+    await userEvent.type(within(dialog).getByLabelText("연락처"), "010-2222-3333");
+    const create = within(dialog).getByRole("button", { name: "예약 만들기" });
+    await waitFor(() => expect(create).toBeEnabled());
+    await userEvent.click(create);
+    await waitFor(() => expect(lastUrl().get("id")).toBe("7"));
+    expect([lastUrl().get("view"), lastUrl().get("m"), lastUrl().get("day")]).toEqual(["calendar", "2026-11", "2026-11-02"]);
+    expect(screen.queryByRole("dialog", { name: "예약 추가" })).toBeNull();
+    expect(await screen.findByText(/예약을 추가했어요/)).toBeInTheDocument();
   });
 });

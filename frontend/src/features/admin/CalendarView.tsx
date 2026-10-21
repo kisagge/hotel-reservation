@@ -9,7 +9,7 @@ import { ReservationDetail } from "@/components/admin/ReservationDetail";
 import { dayChips, type TimelineItem } from "@/components/admin/timeline";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { useOccupancy } from "@/lib/api/adminQueries";
+import { useOccupancy, type AdminReservation } from "@/lib/api/adminQueries";
 import { formatAdminRange, formatDateKo } from "@/lib/format";
 import { todayKst, type YMD } from "@/lib/time";
 import { calendarFromSearch, calendarToSearch, monthRange, type CalendarState } from "./calendar";
@@ -18,7 +18,7 @@ const KIND_KO = { DAYUSE: "대실", STAY: "숙박", BLOCK: "차단" } as const;
 const DOT = { DAYUSE: "bg-amber", STAY: "bg-pine", BLOCK: "bg-danger" } as const;
 
 /** A2 · 예약 관리 → 캘린더 보기. Month, selected day and the opened booking live in the URL. */
-export function CalendarView() {
+export function CalendarView({ onReschedule }: { onReschedule: (r: AdminReservation) => void }) {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -66,7 +66,7 @@ export function CalendarView() {
       </section>
       {id ? (
         <div ref={detailRef} tabIndex={-1} className="shrink-0 outline-none">
-          <ReservationDetail id={id} onClose={() => go(cal)} />
+          <ReservationDetail id={id} onReschedule={onReschedule} onClose={() => go(cal)} />
         </div>
       ) : (
         <DayPanel day={cal.day} items={items} loading={occ.isPending} onOpen={(rid) => go(cal, rid)} />
@@ -81,7 +81,7 @@ function DayPanel({ day, items, loading, onOpen }: {
   const headingId = useId();
   if (!day)
     return (
-      <aside className="flex w-[372px] shrink-0 items-center justify-center rounded-lg border border-dashed border-line-strong p-6 text-center text-body-m text-ink-3">
+      <aside aria-label="날짜별 일정" className="flex w-[372px] shrink-0 items-center justify-center rounded-lg border border-dashed border-line-strong p-6 text-center text-body-m text-ink-3">
         날짜를 선택하면<br />그날 일정이 보여요
       </aside>
     );

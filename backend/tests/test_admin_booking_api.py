@@ -142,3 +142,12 @@ def test_cancel_racing_a_reschedule_leaves_a_consistent_row(admin_client, make_c
         row = db.get(Reservation, r["id"])
         assert row.status == "CANCELLED"
         assert (row.payment.status, row.payment.amount) == ("REFUNDED", row.total_price)
+
+
+def test_admin_quote_can_ignore_the_booking_being_moved(admin_client, user_client):
+    r = walk_in(admin_client)
+    shifted = {**DAYUSE_23_15, "start_hour": 16}
+    assert admin_client.post("/api/admin/quotes", json=shifted).json()["available"] is False
+    q = admin_client.post("/api/admin/quotes", params={"exclude_id": r["id"]}, json=shifted).json()
+    assert q["available"] is True and q["total"] == 35000
+    assert user_client.post("/api/admin/quotes", json=shifted).status_code == 403

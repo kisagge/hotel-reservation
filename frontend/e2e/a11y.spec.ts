@@ -71,5 +71,9 @@ test.describe("admin screens (1440px)", () => {
       await page.goto(url);
       await audit(page, name);
     }
+    await page.goto("/admin/reservations");
+    await page.getByRole("button", { name: "예약 추가" }).click();
+    await page.getByRole("dialog", { name: "예약 추가" }).getByText(/원$|요금을 확인/).first().waitFor();
+    await audit(page, "admin-booking-dialog");
   });
 });
