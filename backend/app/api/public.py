@@ -57,8 +57,12 @@ def stay_availability(db: DB, now: Now,
 
 @router.post("/quotes", response_model=QuoteOut)
 def create_quote(body: QuoteIn, db: DB, now: Now) -> QuoteOut:
+    return quote_out(db, body, now)
+
+
+def quote_out(db, body: QuoteIn, now: datetime, exclude_id: int | None = None) -> QuoteOut:
     try:
-        quote, reason = svc.evaluate_quote(db, body, now)
+        quote, reason = svc.evaluate_quote(db, body, now, exclude_id=exclude_id)
     except RuleViolation as e:
         raise rule_error(e)
     return QuoteOut(type=body.type, start_at=quote.window.start_at, end_at=quote.window.end_at, nights=quote.nights,

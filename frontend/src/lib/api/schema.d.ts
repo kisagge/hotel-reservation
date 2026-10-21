@@ -218,7 +218,48 @@ export interface paths {
         /** List Reservations */
         get: operations["list_reservations_api_admin_reservations_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Walk In
+         * @description A phone or front-desk booking: same rules, prices and overlap checks as a guest booking, no user account.
+         */
+        post: operations["create_walk_in_api_admin_reservations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Quote
+         * @description Like /api/quotes, optionally ignoring one booking (the one being rescheduled).
+         */
+        post: operations["admin_quote_api_admin_quotes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reservations/{reservation_id}/reschedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reschedule */
+        post: operations["reschedule_api_admin_reservations__reservation_id__reschedule_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1235,6 +1276,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReservationPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_walk_in_api_admin_reservations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayUseReservationIn"] | components["schemas"]["StayReservationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReservationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_quote_api_admin_quotes_post: {
+        parameters: {
+            query?: {
+                exclude_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayUseQuoteIn"] | components["schemas"]["StayQuoteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reschedule_api_admin_reservations__reservation_id__reschedule_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reservation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayUseQuoteIn"] | components["schemas"]["StayQuoteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReservationOut"];
                 };
             };
             /** @description Validation Error */

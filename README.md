@@ -105,6 +105,7 @@ WHERE (status = 'CONFIRMED')
 **여러 서버에서 동시에 예약할 때:** `backend/scripts/concurrency_check.py`로 확인해요. 서버 2대(각 프로세스 4개)가 DB 하나를 같이 쓰는 상태에서 사용자 200~400명이 동시에 요청을 보내요.
 - 같은 시간에 몰림, 겹치는 대실·숙박, 차단 대 예약, 동시 취소, 취소와 재예약 동시 진행, 무작위 부하를 시험해요.
 - 끝난 뒤 DB에서 겹친 확정 예약 0건, 결제·환불 일치, 5xx 0건을 확인해요.
+- **어드민 일정 변경:** 새 구간의 날짜 잠금을 먼저 잡고 그다음 예약 행을 잠가요(잠금을 기다리는 동안에는 커넥션을 반납하므로 행 잠금을 먼저 잡으면 풀려 버려요). 겹침은 자기 자신을 뺀 나머지와만 검사해요. 취소는 행 잠금만 쓰기 때문에 둘은 교착되지 않고, 취소·변경·손님 예약이 동시에 와도 결과가 일관돼요(테스트로 확인).
 - 운영할 때는 uvicorn을 `--timeout-keep-alive 30` 이상으로 띄우는 걸 권장해요. 기본 5초면 요청이 몰릴 때 유휴 연결이 끊기는 경쟁 상황이 생겨요.
 
 ```bash
@@ -189,7 +190,9 @@ frontend/src/
 | POST | `/api/quotes` | 견적 (가능 여부와 사유 포함) |
 | POST | `/api/reservations`, GET `/me`, POST `/{id}/cancel` | 예약(모의 결제) · 내 예약 · 취소 |
 | GET | `/api/admin/dashboard` | KPI, 오늘의 타임라인, 다가오는 예약 |
-| GET/POST | `/api/admin/reservations…` | 목록·필터·상세·취소 |
+| GET/POST | `/api/admin/reservations…` | 목록·필터·상세·취소, 현장·전화 예약 추가(`POST`) |
+| POST | `/api/admin/reservations/{id}/reschedule` | 시작 전 예약의 날짜·시간·유형 변경(요금 재계산, 예약번호 유지) |
+| POST | `/api/admin/quotes?exclude_id` | 어드민 견적, 변경 중인 예약 자신은 겹침 검사에서 제외 |
 | GET | `/api/admin/occupancy?date_from&date_to` | 기간의 점유(예약·차단, 최대 62일), 예약 캘린더용 |
 | GET/PUT | `/api/admin/settings` | 요금, 운영 시간, 청소 시간, 취소 마감 |
 | GET/POST/DELETE | `/api/admin/blocks` | 차단 일정 |

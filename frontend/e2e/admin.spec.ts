@@ -48,3 +48,26 @@ test("a regular user cannot open the admin", async ({ page }) => {
   await page.goto("/admin");
   await expect(page.getByText("접근 권한이 없어요")).toBeVisible();
 });
+
+test("admin books a walk-in guest, then moves the booking", async ({ page }) => {
+  await login(page, ADMIN, "/admin/reservations");
+  const d = day(16);
+  await page.getByRole("button", { name: "예약 추가" }).click();
+  const dialog = page.getByRole("dialog", { name: "예약 추가" });
+  await dialog.getByLabel("날짜").fill(d);
+  await dialog.getByLabel("입실 시간").selectOption("10");
+  await dialog.getByLabel("예약자 이름").fill("현장손님");
+  await dialog.getByLabel("연락처").fill("010-2222-3333");
+  await dialog.getByRole("button", { name: "예약 만들기" }).click();
+  await expect(page.getByText(/^예약을 추가했어요/)).toBeVisible();
+  const detail = page.getByRole("complementary", { name: "예약 상세" });
+  await expect(detail).toContainText("현장손님");
+  await expect(detail).toContainText("10:00 – 14:00");
+
+  await detail.getByRole("button", { name: "일정 변경" }).click();
+  const move = page.getByRole("dialog", { name: "일정 변경" });
+  await move.getByLabel("입실 시간").selectOption("14");
+  await move.getByRole("button", { name: "일정 변경하기" }).click();
+  await expect(page.getByText(/^일정을 변경했어요/)).toBeVisible();
+  await expect(detail).toContainText("14:00 – 18:00");
+});

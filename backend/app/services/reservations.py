@@ -6,8 +6,8 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import Literal
 
-from sqlalchemy import Select, func, literal, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import Select, func, literal, or_, select, text
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.clock import KST, kst, today_kst
@@ -21,6 +21,7 @@ from app.services.payments import PaymentProvider
 ROOM_ID = 1
 BOOKING_TYPES = ("DAYUSE", "STAY")
 OVERLAP_SQLSTATE = "23P01"
+LOCK_TIMEOUT_SQLSTATE = "55P03"
 
 
 class SlotUnavailable(Exception):
@@ -38,6 +39,10 @@ class AlreadyCancelled(Exception):
 
 
 class BlockOverlaps(Exception):
+    pass
+
+
+class ReservationStarted(Exception):
     pass
 
 
@@ -62,12 +67,15 @@ def occupying(start: datetime, end: datetime) -> tuple:
             occupied.op("&&")(func.tstzrange(start, end, literal("[)"))))
 
 
-def busy_query(start: datetime, end: datetime) -> Select:
-    return select(Reservation.start_at, Reservation.blocked_until).where(*occupying(start, end))
+def busy_query(start: datetime, end: datetime, exclude_id: int | None = None) -> Select:
+    stmt = select(Reservation.start_at, Reservation.blocked_until).where(*occupying(start, end))
+    # only a booking can be "moved"; a block id never hides the block
+    return stmt if exclude_id is None else stmt.where(or_(Reservation.id != exclude_id, Reservation.type == "BLOCK"))
 
 
-def busy_between(db: Session, start: datetime, end: datetime) -> list[Busy]:
-    return [(r.start_at, r.blocked_until) for r in db.execute(busy_query(start, end))]
+def busy_between(db: Session, start: datetime, end: datetime, exclude_id: int | None = None) -> list[Busy]:
+    """`exclude_id`: a booking being moved does not collide with its own current window."""
+    return [(r.start_at, r.blocked_until) for r in db.execute(busy_query(start, end, exclude_id))]
 
 
 def build_quote(q: QuoteIn, rules: RuleSettings) -> Quote:
@@ -82,7 +90,8 @@ def booking_horizon(now: datetime) -> datetime:
     return kst(today_kst(now) + timedelta(days=get_settings().booking_horizon_days + 1))
 
 
-def evaluate_quote(db: Session, q: QuoteIn, now: datetime, rules: RuleSettings | None = None) -> tuple[Quote, str | None]:
+def evaluate_quote(db: Session, q: QuoteIn, now: datetime, rules: RuleSettings | None = None,
+                   exclude_id: int | None = None) -> tuple[Quote, str | None]:
     """Quote plus the reason it cannot be booked right now (None if bookable). Beyond the horizon → RuleViolation."""
     quote = build_quote(q, rules or load_rules(db))
     w = quote.window
@@ -90,7 +99,7 @@ def evaluate_quote(db: Session, q: QuoteIn, now: datetime, rules: RuleSettings |
         raise RuleViolation("DATE_OUT_OF_RANGE")
     if w.start_at <= now:
         return quote, "IN_THE_PAST"
-    if overlaps(w, busy_between(db, w.start_at, w.blocked_until)):
+    if overlaps(w, busy_between(db, w.start_at, w.blocked_until, exclude_id)):
         return quote, "SLOT_UNAVAILABLE"
     return quote, None
 
@@ -155,7 +164,7 @@ def lock_days(db: Session, start: datetime, end: datetime, still_possible: Calla
             still_possible()
 
 
-def create_reservation(db: Session, user: User, q: QuoteIn, guest_name: str, guest_phone: str, now: datetime,
+def create_reservation(db: Session, user: User | None, q: QuoteIn, guest_name: str, guest_phone: str, now: datetime,
                        payments: PaymentProvider) -> Reservation:
     rules = load_rules(db)  # one settings snapshot for price, buffer and cancel deadline
 
@@ -174,7 +183,7 @@ def create_reservation(db: Session, user: User, q: QuoteIn, guest_name: str, gue
         db.rollback()  # release the day locks now, not when the response has been sent
         raise SlotUnavailable(reason)
     w = quote.window
-    r = Reservation(room_id=ROOM_ID, user_id=user.id, type=q.type, status="CONFIRMED", start_at=w.start_at,
+    r = Reservation(room_id=ROOM_ID, user_id=user.id if user else None, type=q.type, status="CONFIRMED", start_at=w.start_at,
                     end_at=w.end_at, blocked_until=w.blocked_until, nights=quote.nights, guest_name=guest_name,
                     guest_phone=guest_phone, total_price=quote.total,
                     cancel_deadline_at=w.start_at - timedelta(hours=rules.guest_cancel_deadline_hours))
@@ -189,6 +198,70 @@ def create_reservation(db: Session, user: User, q: QuoteIn, guest_name: str, gue
     r.code = f"HR-{w.start_at.astimezone(KST):%m%d}-{r.id:04d}"
     db.add(Payment(reservation_id=r.id, provider=payments.charge(quote.total), amount=quote.total, status="PAID"))
     db.commit()
+    db.refresh(r)
+    return r
+
+
+def _check_reschedulable(r: Reservation | None, now: datetime) -> Reservation:
+    if r is None or r.type not in BOOKING_TYPES:
+        raise LookupError()
+    if r.status == "CANCELLED":
+        raise AlreadyCancelled()
+    if r.start_at <= now:
+        raise ReservationStarted()
+    return r
+
+
+def reschedule_reservation(db: Session, reservation_id: int, q: QuoteIn, now: datetime,
+                           payments: PaymentProvider) -> Reservation:
+    """Move a not-yet-started booking to a new window (type may change), repriced with the current settings.
+
+    Same path as create_reservation: lock-free checks, day locks for the new window, authoritative re-check.
+    The row lock is taken only after the day locks, because lock_days rolls back while it waits (which would
+    drop a row lock held earlier); cancels take only the row lock, so the two cannot deadlock."""
+    rules = load_rules(db)
+    _check_reschedulable(db.get(Reservation, reservation_id), now)
+
+    def still_possible() -> None:
+        _, why = evaluate_quote(db, q, now, rules, exclude_id=reservation_id)
+        if why:
+            db.rollback()
+            raise SlotUnavailable(why)
+
+    still_possible()
+    w = build_quote(q, rules).window
+    lock_days(db, w.start_at, w.blocked_until, still_possible)
+    try:
+        # The row may be held by a cancel or another reschedule. Wait at most booking_lock_timeout_ms (then 503),
+        # never indefinitely while holding this day's locks and a pooled connection.
+        db.execute(text(f"SET LOCAL lock_timeout = '{max(1, get_settings().booking_lock_timeout_ms)}ms'"))
+        r = _check_reschedulable(get_for_update(db, reservation_id), now)
+        quote, reason = evaluate_quote(db, q, now, rules, exclude_id=reservation_id)
+        if reason:
+            raise SlotUnavailable(reason)
+        w = quote.window
+        payment = r.payment  # loaded before the window changes (a lazy load would autoflush the new window)
+        r.type, r.start_at, r.end_at, r.blocked_until = q.type, w.start_at, w.end_at, w.blocked_until
+        r.nights, r.total_price = quote.nights, quote.total
+        r.cancel_deadline_at = w.start_at - timedelta(hours=rules.guest_cancel_deadline_hours)
+        db.flush()  # the exclusion constraint stays the backstop; money moves only after it passes
+        if payment and payment.status == "PAID" and payment.amount != quote.total:
+            payments.adjust(payment, quote.total)
+            payment.amount = quote.total
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        if is_overlap_error(e):
+            raise SlotUnavailable() from e
+        raise
+    except OperationalError as e:
+        db.rollback()
+        if getattr(e.orig, "sqlstate", None) == LOCK_TIMEOUT_SQLSTATE:
+            raise ServiceBusy() from e
+        raise
+    except Exception:
+        db.rollback()  # release the day and row locks now, not after the response is sent
+        raise
     db.refresh(r)
     return r
 

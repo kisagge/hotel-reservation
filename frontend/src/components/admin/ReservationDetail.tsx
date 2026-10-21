@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
-import { useAdminCancel, useAdminReservation } from "@/lib/api/adminQueries";
+import { useAdminCancel, useAdminReservation, type AdminReservation } from "@/lib/api/adminQueries";
 import { ApiError } from "@/lib/api/queries";
 import { errorMessage } from "@/lib/errors";
 import { formatAdminRange, formatRange, formatTime, formatWon, weekdayKo } from "@/lib/format";
@@ -27,25 +27,29 @@ function Row({ k, v, tone }: { k: string; v: React.ReactNode; tone?: string }) {
 }
 
 /** A2 right-hand "예약 상세" panel. */
-export function ReservationDetail({ id, onClose }: { id: number | null; onClose: () => void }) {
+export function ReservationDetail({ id, onClose, onReschedule }: {
+  id: number | null; onClose: () => void; onReschedule?: (r: AdminReservation) => void;
+}) {
   const detail = useAdminReservation(id);
   const cancel = useAdminCancel();
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
+  const [openedAt] = useState(() => Date.now()); // the server rejects a booking that started meanwhile (409)
   const r = detail.data;
 
-  if (!id) return <aside className="flex w-[372px] shrink-0 items-center justify-center rounded-lg border border-dashed border-line-strong p-6 text-center text-body-m text-ink-3">예약을 선택하면<br />상세 정보가 보여요</aside>;
+  if (!id) return <aside aria-label="예약 상세" className="flex w-[372px] shrink-0 items-center justify-center rounded-lg border border-dashed border-line-strong p-6 text-center text-body-m text-ink-3">예약을 선택하면<br />상세 정보가 보여요</aside>;
   if (detail.isError)
     return (
-      <aside role="alert" className="flex w-[372px] shrink-0 flex-col items-center justify-center gap-3 rounded-lg border border-line bg-surface p-6 text-center">
+      <aside role="alert" aria-label="예약 상세" className="flex w-[372px] shrink-0 flex-col items-center justify-center gap-3 rounded-lg border border-line bg-surface p-6 text-center">
         <p className="text-body-m text-ink-2">{detail.error instanceof ApiError && detail.error.status === 404 ? "예약을 찾을 수 없어요" : "예약 정보를 불러오지 못했어요"}</p>
         <Button variant="secondary" size="m" onClick={onClose}>닫기</Button>
       </aside>
     );
-  if (!r) return <aside aria-busy="true" className="w-[372px] shrink-0 animate-pulse rounded-lg border border-line bg-surface" />;
+  if (!r) return <aside aria-label="예약 상세" aria-busy="true" className="w-[372px] shrink-0 animate-pulse rounded-lg border border-line bg-surface" />;
 
   const hours = Math.round((Date.parse(r.end_at) - Date.parse(r.start_at)) / 3_600_000);
   const cancellable = r.display_status === "CONFIRMED";
+  const movable = r.status === "CONFIRMED" && Date.parse(r.start_at) > openedAt;
   const doCancel = () =>
     cancel.mutate(r.id, {
       onSuccess: () => toast("예약을 취소했어요"),
@@ -90,6 +94,7 @@ export function ReservationDetail({ id, onClose }: { id: number | null; onClose:
       )}
       <div className="flex gap-2">
         <Button variant="secondary" size="m" className="flex-1" onClick={onClose}>닫기</Button>
+        {movable && onReschedule && <Button variant="secondary" size="m" className="flex-1" onClick={() => onReschedule(r)}>일정 변경</Button>}
         {cancellable && <Button variant="danger" size="m" className="flex-1" onClick={() => setConfirming(true)}>예약 취소</Button>}
       </div>
       <ConfirmDialog open={confirming} tone="danger" title="이 예약을 취소할까요?" confirmLabel="취소하기" loading={cancel.isPending}

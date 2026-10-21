@@ -12,6 +12,8 @@ const MESSAGES: Record<string, string> = {
   NIGHTS_OUT_OF_RANGE: "숙박 가능 기간을 넘었어요",
   SERVICE_BUSY: "지금 예약 요청이 많아요. 잠시 후 다시 시도해 주세요",
   DATE_OUT_OF_RANGE: "선택할 수 없는 날짜예요",
+  RESERVATION_STARTED: "이미 시작된 예약이에요",
+  NOT_FOUND: "예약을 찾을 수 없어요",
 };
 
 export const FALLBACK_MESSAGE = "잠시 후 다시 시도해 주세요";
