@@ -151,3 +151,53 @@ def test_admin_quote_can_ignore_the_booking_being_moved(admin_client, user_clien
     q = admin_client.post("/api/admin/quotes", params={"exclude_id": r["id"]}, json=shifted).json()
     assert q["available"] is True and q["total"] == 35000
     assert user_client.post("/api/admin/quotes", json=shifted).status_code == 403
+
+
+def test_reschedule_waits_for_a_held_row_only_within_the_lock_budget(admin_client, engine, monkeypatch):
+    """Another transaction holding the row must not pin this request (and the day's locks) indefinitely."""
+    import threading
+    import time
+    from sqlalchemy import text
+    from app.core.config import get_settings
+    monkeypatch.setattr(get_settings(), "booking_lock_timeout_ms", 300)
+    r = walk_in(admin_client)
+    held, release = threading.Event(), threading.Event()
+
+    def hold():
+        with engine.connect() as conn:
+            conn.execute(text("SELECT id FROM reservations WHERE id = :id FOR UPDATE"), {"id": r["id"]})
+            held.set()
+            release.wait(5)
+            conn.rollback()
+
+    t = threading.Thread(target=hold)
+    t.start()
+    held.wait(5)
+    try:
+        started = time.monotonic()
+        res = admin_client.post(f"/api/admin/reservations/{r['id']}/reschedule", json={**DAYUSE_23_15, "start_hour": 17})
+        took = time.monotonic() - started
+    finally:
+        release.set()
+        t.join()
+    assert res.status_code == 503 and res.json()["detail"] == "SERVICE_BUSY"
+    assert took < 2
+
+
+def test_payment_is_adjusted_only_after_the_overlap_backstop_passes(admin_client, db, monkeypatch):
+    from app.services import reservations as svc
+    r = walk_in(admin_client)
+    book(db, kst(D(24), 10), kst(D(24), 14), kst(D(24), 15), guest_name="다른손님")
+    calls = []
+    monkeypatch.setattr(svc, "evaluate_quote", lambda *a, **kw: (svc.build_quote(a[1], a[3]), None))  # skip the pre-checks
+    from app.services.payments import MockPaymentProvider
+    monkeypatch.setattr(MockPaymentProvider, "adjust", lambda self, p, amount: calls.append(amount))
+    res = admin_client.post(f"/api/admin/reservations/{r['id']}/reschedule", json={"type": "DAYUSE", "date": "2026-10-24", "start_hour": 11})
+    assert res.status_code == 409  # caught by the exclusion constraint
+    assert calls == []  # no money moved for a change that was rolled back
+
+
+def test_rescheduling_a_block_or_quoting_without_one_is_refused(admin_client, db):
+    block = book(db, kst(D(27)), kst(D(28)), kst(D(28)), type="BLOCK", price=0, guest_name="", block_reason="점검")
+    slot = {"type": "DAYUSE", "date": "2026-10-27", "start_hour": 12}
+    assert admin_client.post("/api/admin/quotes", params={"exclude_id": block.id}, json=slot).json()["available"] is False
