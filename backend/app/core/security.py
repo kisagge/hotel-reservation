@@ -60,11 +60,12 @@ def _email_digest(email: str) -> str:
     return hashlib.sha256(email.lower().encode()).hexdigest()
 
 
-def create_device_token(email: str) -> str:
-    """Marks this browser as one that has signed in to `email`; carries no access rights by itself."""
+def create_device_token(email: str, device_id: str | None = None) -> str:
+    """Marks this browser as one that has signed in to `email`; carries no access rights by itself.
+    Pass the existing `device_id` to extend a known device instead of minting a new one (a new ID = a new bucket)."""
     s = get_settings()
     exp = datetime.now(UTC) + timedelta(days=s.device_cookie_days)
-    return jwt.encode({"typ": DEVICE_TYP, "sub": _email_digest(email), "jti": uuid.uuid4().hex, "exp": exp},
+    return jwt.encode({"typ": DEVICE_TYP, "sub": _email_digest(email), "jti": device_id or uuid.uuid4().hex, "exp": exp},
                       s.jwt_secret, algorithm=ALGORITHM)
 
 

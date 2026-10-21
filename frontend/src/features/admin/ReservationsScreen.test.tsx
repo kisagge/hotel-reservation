@@ -92,4 +92,21 @@ describe("ReservationsScreen · calendar view", () => {
     expect(lastUrl().get("id")).toBe("1");
     expect(lastUrl().get("view")).toBe("calendar");
   });
+
+  it("moves keyboard focus into the opened booking and back to it on close", async () => {
+    nav.replace("/admin/reservations?view=calendar&m=2026-10&day=2026-10-23");
+    fakeApi({
+      "GET /api/admin/occupancy": () => json(OCC),
+      "GET /api/admin/reservations/1": () => json({ detail: "NOT_FOUND" }, 404),
+    });
+    renderWithProviders(<ReservationsScreen />);
+    const opener = await screen.findByRole("button", { name: /이서연/ });
+    opener.focus();
+    await userEvent.keyboard("{Enter}");
+    await screen.findByText("예약을 찾을 수 없어요");
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.contains(screen.getByText("예약을 찾을 수 없어요"))).toBe(true);
+    await userEvent.click(screen.getByRole("button", { name: "닫기" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: /이서연/ })));
+  });
 });

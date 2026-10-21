@@ -23,12 +23,12 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 Now = Annotated[datetime, Depends(get_now)]
 
 
-def _set_session(response: Response, user: User) -> None:
+def _set_session(response: Response, user: User, device_id: str | None = None) -> None:
     s = get_settings()
     response.set_cookie(s.cookie_name, create_access_token(user.id, user.role), max_age=s.jwt_expire_minutes * 60,
                         httponly=True, samesite="lax", path="/", secure=s.session_cookie_secure)
     # Survives logout on purpose; only sent to the auth endpoints.
-    response.set_cookie(s.device_cookie_name, create_device_token(user.email), max_age=s.device_cookie_days * 86400,
+    response.set_cookie(s.device_cookie_name, create_device_token(user.email, device_id), max_age=s.device_cookie_days * 86400,
                         httponly=True, samesite="strict", path="/api/auth", secure=s.session_cookie_secure)
 
 
@@ -56,18 +56,22 @@ def signup(body: SignupIn, db: DB, response: Response, request: Request, now: No
 def login(body: LoginIn, db: DB, response: Response, request: Request, now: Now) -> User:
     s = get_settings()
     device = device_id_for(request.cookies.get(s.device_cookie_name), body.email)
-    if device:  # this browser signed in to this account before: its own budget, untouched by lockouts aimed at others
-        checks = [(f"login:device:{device}", s.login_per_device_limit, s.login_per_device_window_s)]
+    ip = client_ip(request)
+    if device:  # this browser signed in to this account before: budgets untouched by lockouts aimed at strangers
+        checks = [(f"login:device:{device}", s.login_per_device_limit, s.login_per_device_window_s),
+                  (subject_key("login:device-account", body.email.lower()), s.login_per_device_account_limit,
+                   s.login_per_device_account_window_s),
+                  (f"login:device-ip:{ip}", s.login_per_device_ip_limit, s.login_per_device_ip_window_s)]
     else:
         checks = [(subject_key("login:email", body.email.lower()), s.login_per_email_limit, s.login_per_email_window_s),
-                  (f"login:ip:{client_ip(request)}", s.login_per_ip_limit, s.login_per_ip_window_s)]
+                  (f"login:ip:{ip}", s.login_per_ip_limit, s.login_per_ip_window_s)]
     enforce(db, checks, now)
     user = db.scalar(select(User).where(User.email == body.email.lower()))
     stored_hash = user.password_hash if user else None
     db.rollback()  # return the connection to the pool before the slow argon2 verify
     if user is None or not verify_password(body.password, stored_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "INVALID_CREDENTIALS")
-    _set_session(response, user)
+    _set_session(response, user, device)
     return user
 
 

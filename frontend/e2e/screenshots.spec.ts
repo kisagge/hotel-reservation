@@ -1,5 +1,5 @@
 import { test } from "@playwright/test";
-import { ADMIN, DEMO, day, login } from "./helpers";
+import { ADMIN, DEMO, day, login, monthParam } from "./helpers";
 
 // README screenshots from the production build: `SCREENSHOTS=1 npm run e2e -- screenshots`
 test.skip(!process.env.SCREENSHOTS, "set SCREENSHOTS=1 to refresh docs/screenshots");
@@ -23,7 +23,7 @@ test("capture README screenshots", async ({ page }) => {
   await page.getByText("오늘의 객실 타임라인").waitFor();
   await page.waitForTimeout(500);
   await page.screenshot({ path: out("admin-dashboard") });
-  await page.goto(`/admin/reservations?view=calendar&day=${day(4)}`);
+  await page.goto(`/admin/reservations?view=calendar&m=${monthParam(day(4))}&day=${day(4)}`);
   await page.getByRole("list", { name: "이날 일정" }).waitFor();
   await page.waitForTimeout(500);
   await page.screenshot({ path: out("admin-calendar") });

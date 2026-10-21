@@ -2,7 +2,7 @@
 
 import { Ban } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { AdminCalendar } from "@/components/admin/AdminCalendar";
 import { DayTimeline, TIMELINE_LEGEND } from "@/components/admin/DayTimeline";
 import { ReservationDetail } from "@/components/admin/ReservationDetail";
@@ -31,6 +31,21 @@ export function CalendarView() {
   const occ = useOccupancy(from, to);
   const items = occ.data ?? [];
 
+  // Opening a booking swaps the day panel for the detail (and back), unmounting the focused button; move keyboard
+  // focus with it. A deep link (id already in the URL on load) does not steal focus.
+  const detailRef = useRef<HTMLDivElement>(null);
+  const shownId = useRef(id);
+  useEffect(() => {
+    const prev = shownId.current;
+    shownId.current = id;
+    if (id && id !== prev) detailRef.current?.focus();
+    else if (!id && prev) {
+      const back = document.querySelector<HTMLElement>(`[data-booking-id="${prev}"]`)
+        ?? document.querySelector<HTMLElement>('table [aria-pressed="true"]');
+      back?.focus();
+    }
+  }, [id]);
+
   return (
     <div className="flex min-h-[640px] items-start gap-4">
       <section aria-label="월간 일정" className="flex min-w-0 flex-1 flex-col gap-3 rounded-lg border border-line bg-surface px-5 pb-5 pt-4">
@@ -50,7 +65,9 @@ export function CalendarView() {
         </ul>
       </section>
       {id ? (
-        <ReservationDetail id={id} onClose={() => go(cal)} />
+        <div ref={detailRef} tabIndex={-1} className="shrink-0 outline-none">
+          <ReservationDetail id={id} onClose={() => go(cal)} />
+        </div>
       ) : (
         <DayPanel day={cal.day} items={items} loading={occ.isPending} onOpen={(rid) => go(cal, rid)} />
       )}
@@ -104,7 +121,7 @@ function DayPanel({ day, items, loading, onOpen }: {
                         <Ban className="ml-auto size-4 shrink-0 text-danger" strokeWidth={1.75} aria-hidden />
                       </div>
                     ) : (
-                      <button type="button" onClick={() => onOpen(c.id)}
+                      <button type="button" data-booking-id={c.id} onClick={() => onOpen(c.id)}
                         className="flex w-full items-center gap-3 rounded-md bg-canvas p-3 text-left hover:bg-pine-soft/50">
                         {body}
                       </button>
