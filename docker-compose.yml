@@ -2,7 +2,7 @@
 # `docker compose --profile app up -d`  → whole stack: db + FastAPI + Next.js (http://localhost:3000)
 services:
   db:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_USER: haru
       POSTGRES_PASSWORD: haru
